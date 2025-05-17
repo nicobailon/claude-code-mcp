@@ -1,14 +1,14 @@
 import { vi } from 'vitest';
-import * as path from 'path';
 
 // Helper for setting up mocks consistently in tests
 export function setupServerMocks() {
   // Mock path.isAbsolute
   vi.mock('path', () => {
-    const originalModule = vi.importActual('path') as typeof path;
     return {
-      ...originalModule,
+      join: vi.fn((...parts) => parts.join('/')),
+      resolve: vi.fn((p) => p),
       isAbsolute: vi.fn((p: string) => p.startsWith('/')),
+      dirname: vi.fn((p) => p.substring(0, p.lastIndexOf('/'))),
     };
   });
   
@@ -45,10 +45,12 @@ export function setupServerMocks() {
 // Helper to prevent server instantiation
 export function preventServerInstantiation() {
   // Replace ClaudeCodeServer with a function that doesn't actually create a server
-  vi.mock('../server.js', async (importOriginal) => {
-    const originalModule = await importOriginal();
-    return {
-      ...originalModule,
+  vi.mock('../server.js', () => {
+    // Create a mock module with only the needed parts
+    const mockModule = {
+      debugLog: vi.fn(),
+      findClaudeCli: vi.fn(() => '/mock/claude'),
+      spawnAsync: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
       ClaudeCodeServer: class MockClaudeCodeServer {
         server: any;
         constructor() {
@@ -56,7 +58,8 @@ export function preventServerInstantiation() {
         }
         setupToolHandlers() {} // No-op
         run() { return Promise.resolve(); }
-      },
+      }
     };
+    return mockModule;
   });
 }
