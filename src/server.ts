@@ -25,10 +25,6 @@ const debugMode = process.env.MCP_CLAUDE_DEBUG === 'true';
 const isOrchestratorMode = process.env.CLAUDE_CLI_NAME?.includes('orchestrator') || 
                            process.env.MCP_ORCHESTRATOR_MODE === 'true';
 
-// Configure timeouts based on environment variables or defaults
-const defaultTimeout = parseInt(process.env.BASH_DEFAULT_TIMEOUT_MS || '300000'); // Default: 5 minutes
-const maxTimeout = parseInt(process.env.BASH_MAX_TIMEOUT_MS || '1800000');       // Default: 30 minutes
-
 // Track if this is the first tool use for version printing
 let isFirstToolUse = true;
 
@@ -96,7 +92,6 @@ export function findClaudeCli(): string {
 interface ClaudeCodeArgs {
   prompt: string;
   workFolder?: string;
-  timeout?: number;
 }
 
 // Ensure spawnAsync is defined correctly *before* the class
@@ -204,7 +199,7 @@ When delegating tasks, use this format:
 Your work folder is /absolute/path/to/project
 [Clear, atomic task instructions]
 \`\`\`
-You have extended timeouts (up to ${maxTimeout/60000} minutes) for complex operations.
+You have extended timeouts for complex operations.
 Focus on task decomposition and coordination rather than direct execution.
 `;
   }
@@ -260,10 +255,6 @@ Focus on task decomposition and coordination rather than direct execution.
                 type: 'string',
                 description: 'Mandatory when using file operations or referencing any file. The working directory for the Claude CLI execution. Must be an absolute path.',
               },
-              timeout: {
-                type: 'number',
-                description: `Custom timeout in milliseconds (max ${maxTimeout}). Optional.`,
-              },
             },
             required: ['prompt'],
           },
@@ -272,13 +263,7 @@ Focus on task decomposition and coordination rather than direct execution.
     }));
 
     // Handle tool calls
-    // Helper function to get execution timeout
-    const getExecutionTimeout = (customTimeout?: number): number => {
-      if (customTimeout && customTimeout <= maxTimeout) {
-        return customTimeout;
-      }
-      return isOrchestratorMode ? maxTimeout : defaultTimeout;
-    };
+    const executionTimeoutMs = 1800000; // 30 minutes timeout
 
     this.server.setRequestHandler(CallToolRequestSchema, async (args, call): Promise<ServerResult> => {
       debugLog('[Debug] Handling CallToolRequest:', args);
@@ -325,11 +310,7 @@ Focus on task decomposition and coordination rather than direct execution.
       }
 
       try {
-        // Get custom timeout if provided
-        const customTimeout = toolArguments.timeout as number | undefined;
-        const executionTimeoutMs = getExecutionTimeout(customTimeout);
-        
-        debugLog(`[Debug] Attempting to execute Claude CLI with prompt: "${prompt}" in CWD: "${effectiveCwd}" (timeout: ${executionTimeoutMs}ms)`);
+        debugLog(`[Debug] Attempting to execute Claude CLI with prompt: "${prompt}" in CWD: "${effectiveCwd}"`);
 
         // Print tool info on first use
         if (isFirstToolUse) {
@@ -382,12 +363,8 @@ Focus on task decomposition and coordination rather than direct execution.
         }
 
         if (error.signal === 'SIGTERM' || (error.message && error.message.includes('ETIMEDOUT')) || (error.code === 'ETIMEDOUT')) {
-          // Get the timeout that was used
-          const customTimeout = toolArguments.timeout as number | undefined;
-          const usedTimeoutMs = getExecutionTimeout(customTimeout);
-          
           // Reverting to InternalError due to lint issues, but with a specific timeout message.
-          throw new McpError(ErrorCode.InternalError, `Claude CLI command timed out after ${usedTimeoutMs / 1000}s. Details: ${errorMessage}`);
+          throw new McpError(ErrorCode.InternalError, `Claude CLI command timed out after ${executionTimeoutMs / 1000}s. Details: ${errorMessage}`);
         }
         // ErrorCode.ToolCallFailed should be ErrorCode.InternalError or a more specific execution error if available
         throw new McpError(ErrorCode.InternalError, `Claude CLI execution failed: ${errorMessage}`);

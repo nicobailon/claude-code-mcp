@@ -56,10 +56,6 @@ This MCP server provides one tool that can be used by LLMs to interact with Clau
 
 - `MCP_ORCHESTRATOR_MODE`: Enable orchestrator mode (set to `true` to activate). Alternatively, include "orchestrator" in the `CLAUDE_CLI_NAME` value.
 
-- `BASH_DEFAULT_TIMEOUT_MS`: Set the default timeout for Claude CLI executions (default: 300000ms / 5 minutes)
-
-- `BASH_MAX_TIMEOUT_MS`: Set the maximum allowed timeout for Claude CLI executions (default: 1800000ms / 30 minutes)
-
 ## Installation & Usage
 
 The recommended way to use this server is by installing it by using `npx`.
@@ -101,15 +97,12 @@ To use claude-code-mcp in orchestrator mode, configure it with the orchestrator 
         "@steipete/claude-code-mcp@latest"
       ],
       "env": {
-        "MCP_ORCHESTRATOR_MODE": "true",
-        "BASH_DEFAULT_TIMEOUT_MS": "300000",
-        "BASH_MAX_TIMEOUT_MS": "1800000"
+        "MCP_ORCHESTRATOR_MODE": "true"
       }
     },
 ```
 
 Orchestrator mode enables:
-- Extended timeout support for complex operations
 - Task delegation capabilities 
 - Recursion prevention
 - Enhanced orchestration prompting
@@ -179,7 +172,6 @@ Executes a prompt directly using the Claude Code CLI with `--dangerously-skip-pe
 **Arguments:**
 - `prompt` (string, required): The prompt to send to Claude Code.
 - `workFolder` (string, optional): The working directory for Claude Code's execution. Must be an absolute path.
-- `timeout` (number, optional): Custom timeout in milliseconds for long-running operations. Maximum value depends on configuration (default max: 1800000ms / 30 minutes).
 - `options` (object, optional):
   - `tools` (array of strings, optional): Specific Claude tools to enable (e.g., `Bash`, `Read`, `Write`). Common tools are enabled by default.
 
@@ -189,8 +181,7 @@ Executes a prompt directly using the Claude Code CLI with `--dangerously-skip-pe
   "toolName": "claude_code:claude_code",
   "arguments": {
     "prompt": "Refactor the function foo in main.py to be async.",
-    "workFolder": "/Users/username/projects/my-project",
-    "timeout": 600000
+    "workFolder": "/Users/username/projects/my-project"
   }
 }
 ```
@@ -330,8 +321,6 @@ The server's behavior can be customized using these environment variables:
   - Default: Checks `~/.claude/local/claude`, then falls back to `claude` (expecting it in PATH).
 - `MCP_CLAUDE_DEBUG`: Set to `true` for verbose debug logging from this MCP server. Default: `false`.
 - `MCP_ORCHESTRATOR_MODE`: Set to `true` to enable orchestrator mode. Default: `false`.
-- `BASH_DEFAULT_TIMEOUT_MS`: Default timeout for Claude CLI executions in milliseconds. Default: `300000` (5 minutes).
-- `BASH_MAX_TIMEOUT_MS`: Maximum allowed timeout for Claude CLI executions in milliseconds. Default: `1800000` (30 minutes).
 
 These can be set in your shell environment or within the `env` block of your `mcp.json` server configuration (though the `env` block in `mcp.json` examples was removed for simplicity, it's still a valid way to set them for the server process if needed).
 
