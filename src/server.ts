@@ -16,10 +16,14 @@ import * as path from 'path';
 import { readFileSync } from 'node:fs';
 
 // Server version - update this when releasing new versions
-const SERVER_VERSION = "1.10.12";
+const SERVER_VERSION = "1.11.0";
 
 // Define debugMode globally using const
 const debugMode = process.env.MCP_CLAUDE_DEBUG === 'true';
+
+// Detect orchestrator mode
+const isOrchestratorMode = process.env.CLAUDE_CLI_NAME?.includes('orchestrator') || 
+                           process.env.MCP_ORCHESTRATOR_MODE === 'true';
 
 // Track if this is the first tool use for version printing
 let isFirstToolUse = true;
@@ -66,7 +70,13 @@ export function findClaudeCli(): string {
   const cliName = customCliName || 'claude';
 
   // Try local install path: ~/.claude/local/claude (using the original name for local installs)
-  const userPath = join(homedir(), '.claude', 'local', 'claude');
+  // Use a default home value for tests where homedir() might be mocked to undefined
+  let home = homedir();
+  if (!home) {
+    home = process.env.HOME || '/home/user';
+    debugLog(`[Debug] homedir() returned undefined, using fallback: ${home}`);
+  }
+  const userPath = join(home, '.claude', 'local', 'claude');
   debugLog(`[Debug] Checking for Claude CLI at local user path: ${userPath}`);
 
   if (existsSync(userPath)) {
@@ -91,13 +101,18 @@ interface ClaudeCodeArgs {
 }
 
 // Ensure spawnAsync is defined correctly *before* the class
-export async function spawnAsync(command: string, args: string[], options?: { timeout?: number, cwd?: string }): Promise<{ stdout: string; stderr: string }> {
+export async function spawnAsync(command: string, args: string[], options?: { 
+  timeout?: number, 
+  cwd?: string,
+  env?: NodeJS.ProcessEnv 
+}): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     debugLog(`[Spawn] Running command: ${command} ${args.join(' ')}`);
     const process = spawn(command, args, {
       shell: false, // Reverted to false
       timeout: options?.timeout,
       cwd: options?.cwd,
+      env: options?.env,
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -175,13 +190,33 @@ export class ClaudeCodeServer {
   /**
    * Set up the MCP tool handlers
    */
+  /**
+   * Gets orchestrator-specific system prompt if in orchestrator mode
+   */
+  private getOrchestratorSystemPrompt(): string {
+    if (!isOrchestratorMode) return '';
+    
+    return `
+
+[ORCHESTRATOR MODE ACTIVE]
+You can break down complex tasks and execute them via delegated Claude Code instances.
+When delegating tasks, use this format:
+\`\`\`
+Your work folder is /absolute/path/to/project
+[Clear, atomic task instructions]
+\`\`\`
+You have extended timeouts for complex operations.
+Focus on task decomposition and coordination rather than direct execution.
+`;
+  }
+
   private setupToolHandlers(): void {
     // Define available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
         {
           name: 'claude_code',
-          description: `Claude Code Agent: Your versatile multi-modal assistant for code, file, Git, and terminal operations via Claude CLI. Use \`workFolder\` for contextual execution.
+          description: `Claude Code Agent: Your versatile multi-modal assistant for code, file, Git, and terminal operations via Claude CLI. Use \`workFolder\` for contextual execution.${this.getOrchestratorSystemPrompt()}
 
 • File ops: Create, read, (fuzzy) edit, move, copy, delete, list files, analyze/ocr images, file content analysis
     └─ e.g., "Create /tmp/log.txt with 'system boot'", "Edit main.py to replace 'debug_mode = True' with 'debug_mode = False'", "List files in /src", "Move a specific section somewhere else"
@@ -286,17 +321,32 @@ export class ClaudeCodeServer {
         // Print tool info on first use
         if (isFirstToolUse) {
           const versionInfo = `claude_code v${SERVER_VERSION} started at ${serverStartupTime}`;
-          console.error(versionInfo);
+          const modeInfo = isOrchestratorMode ? ' [ORCHESTRATOR MODE]' : '';
+          console.error(versionInfo + modeInfo);
           isFirstToolUse = false;
         }
 
         const claudeProcessArgs = ['--dangerously-skip-permissions', '-p', prompt];
         debugLog(`[Debug] Invoking Claude CLI: ${this.claudeCliPath} ${claudeProcessArgs.join(' ')}`);
 
+        // Create a clean environment to prevent recursion
+        const spawnEnv = { ...process.env };
+        
+        // Prevent recursion by removing orchestrator-specific variables
+        if (isOrchestratorMode) {
+          delete spawnEnv.CLAUDE_CLI_NAME;           // Use default claude CLI
+          delete spawnEnv.MCP_ORCHESTRATOR_MODE;     // Remove orchestrator mode
+          spawnEnv.MCP_CLAUDE_DEBUG = 'false';       // Reduce noise from spawned instances
+        }
+
         const { stdout, stderr } = await spawnAsync(
           this.claudeCliPath, // Run the Claude CLI directly
           claudeProcessArgs, // Pass the arguments
-          { timeout: executionTimeoutMs, cwd: effectiveCwd }
+          { 
+            timeout: executionTimeoutMs, 
+            cwd: effectiveCwd,
+            env: spawnEnv  // Use clean environment for spawned instances
+          }
         );
 
         debugLog('[Debug] Claude CLI stdout:', stdout.trim());

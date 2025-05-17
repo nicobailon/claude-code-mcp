@@ -54,6 +54,8 @@ This MCP server provides one tool that can be used by LLMs to interact with Clau
 
 - `MCP_CLAUDE_DEBUG`: Enable debug logging (set to `true` for verbose output)
 
+- `MCP_ORCHESTRATOR_MODE`: Enable orchestrator mode (set to `true` to activate). Alternatively, include "orchestrator" in the `CLAUDE_CLI_NAME` value.
+
 ## Installation & Usage
 
 The recommended way to use this server is by installing it by using `npx`.
@@ -82,6 +84,95 @@ To use a custom Claude CLI binary name, you can specify the environment variable
       }
     },
 ```
+
+## Orchestrator Setup with Virtual Environments
+
+The Claude Code MCP tool supports an advanced "agents in agents" architecture through orchestrator mode, enabling meta-orchestration where one Claude instance coordinates multiple worker instances.
+
+### Orchestrator Architecture
+
+The orchestrator pattern uses a dedicated Claude environment with enhanced capabilities:
+
+<img src="assets/agents_in_agents_meme.jpg" alt="Agents in Agents Meme" width="300">
+
+- **Meta-orchestration**: Claude managing multiple Claude instances
+- **Environment isolation**: Clean main environment, enhanced orchestrator
+- **Task decomposition**: Break complex workflows into atomic operations
+- **No recursion**: Worker instances cannot spawn additional instances
+
+### 1. Create Orchestrator Environment
+
+```bash
+# Create a named virtual environment for orchestration
+claude --name claude-orchestrator
+
+# Switch to the orchestrator environment
+claude --env claude-orchestrator
+```
+
+### 2. Configure Orchestrator Environment
+
+Create or edit `.claude.json` in the orchestrator environment:
+
+```json
+{
+  "mcpServers": {
+    "claude_code": {
+      "command": "npx",
+      "args": [
+        "-y", 
+        "@steipete/claude-code-mcp@latest"
+      ],
+      "env": {
+        "MCP_ORCHESTRATOR_MODE": "true"
+      }
+    }
+  }
+}
+```
+
+### 3. Keep Main Environment Clean
+
+Your default Claude Code environment should remain without orchestrator capabilities:
+- Standard timeouts
+- Clean configuration
+- No orchestrator privileges
+
+### 4. Usage Pattern
+
+```bash
+# Switch to orchestrator for complex workflows
+claude --env claude-orchestrator
+
+# Example orchestrator prompt:
+"Create auth system in /path/to/project:
+1. Generate JWT middleware in src/middleware/auth.js
+2. Create user model with password hashing
+3. Add auth routes to API
+4. Write unit tests
+5. Run test suite
+6. Commit changes with descriptive message
+7. Create GitHub PR"
+
+# Switch back to main environment for regular tasks
+claude  # or claude --env default
+```
+
+### Helper Scripts
+
+Create shortcuts for easy environment switching:
+
+```bash
+# ~/.bashrc or ~/.zshrc
+alias claude-orchestrator='claude --env claude-orchestrator'
+alias claude-main='claude --env default'
+```
+
+### Orchestrator Troubleshooting
+
+- **Recursion warnings**: Ensure main environment has no orchestrator mode enabled
+- **Permission errors**: Verify `--dangerously-skip-permissions` was accepted in both environments
+- **Environment confusion**: Check which Claude environment is active with `claude env`
 
 ## Important First-Time Setup: Accepting Permissions
 
@@ -196,6 +287,7 @@ This server, through its unified `claude_code` tool, unlocks a wide range of pow
 
 6.  **Complex Multi-Step Workflows:**
     -   Automate version bumps, update changelogs, and tag releases: `"Your work folder is /Users/steipete/my_project\n\nFollow these steps: 1. Update the version in package.json to 2.5.0. 2. Add a new section to CHANGELOG.md for version 2.5.0 with the heading '### Added' and list 'New feature X'. 3. Stage package.json and CHANGELOG.md. 4. Commit with message 'release: version 2.5.0'. 5. Push the commit. 6. Create and push a git tag v2.5.0."`
+    -   For even more complex workflows across multiple files, consider using the [Orchestrator Setup](#orchestrator-setup-with-virtual-environments) which enables "agents in agents" architecture.
 
     <img src="assets/multistep_example.png" alt="Complex multi-step operation example" width="50%">
 
@@ -262,9 +354,10 @@ For detailed testing documentation, see our [E2E Testing Guide](./docs/e2e-testi
 
 The server's behavior can be customized using these environment variables:
 
-- `CLAUDE_CLI_PATH`: Absolute path to the Claude CLI executable.
+- `CLAUDE_CLI_NAME`: Override the Claude CLI binary name or provide an absolute path (default: `claude`).
   - Default: Checks `~/.claude/local/claude`, then falls back to `claude` (expecting it in PATH).
 - `MCP_CLAUDE_DEBUG`: Set to `true` for verbose debug logging from this MCP server. Default: `false`.
+- `MCP_ORCHESTRATOR_MODE`: Set to `true` to enable orchestrator mode. Default: `false`.
 
 These can be set in your shell environment or within the `env` block of your `mcp.json` server configuration (though the `env` block in `mcp.json` examples was removed for simplicity, it's still a valid way to set them for the server process if needed).
 
