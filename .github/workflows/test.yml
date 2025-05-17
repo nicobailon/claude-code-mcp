@@ -27,15 +27,30 @@ jobs:
     - name: Build
       run: npm run build
       
+    - name: Detect orchestrator feature branch
+      id: detect-branch
+      run: |
+        if [[ "${{ github.ref }}" == *"orchestrator"* ]]; then
+          echo "is_orchestrator_branch=true" >> $GITHUB_OUTPUT
+        else
+          echo "is_orchestrator_branch=false" >> $GITHUB_OUTPUT
+        fi
+      
+    - name: Run orchestrator tests
+      if: steps.detect-branch.outputs.is_orchestrator_branch == 'true'
+      run: npm run test:pr
+      
     - name: Run unit tests only
+      if: steps.detect-branch.outputs.is_orchestrator_branch != 'true'
       run: npm run test:unit
       
     - name: Run all tests with coverage
+      if: steps.detect-branch.outputs.is_orchestrator_branch != 'true'
       run: npm run test:coverage
       
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
-      if: matrix.node-version == '20.x'
+      if: matrix.node-version == '20.x' && steps.detect-branch.outputs.is_orchestrator_branch != 'true'
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: ./coverage/coverage-final.json
