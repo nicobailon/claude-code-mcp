@@ -56,6 +56,12 @@ elif [[ "$prompt" == *"Create"* ]]; then
   echo "Created file successfully"  
 elif [[ "$prompt" == *"git"* ]] && [[ "$prompt" == *"commit"* ]]; then
   echo "Committed changes successfully"
+elif [[ "$prompt" == *"check_env"* ]]; then
+  echo "Environment Variables in Mock:"
+  echo "MCP_ORCHESTRATOR_MODE_IN_MOCK=$MCP_ORCHESTRATOR_MODE"
+  echo "CLAUDE_CLI_NAME_IN_MOCK=$CLAUDE_CLI_NAME"
+  echo "MCP_CLAUDE_DEBUG_IN_MOCK=$MCP_CLAUDE_DEBUG"
+  exit 0
 elif [[ "$prompt" == *"error"* ]]; then
   echo "Error: Mock error response" >&2
   exit 1

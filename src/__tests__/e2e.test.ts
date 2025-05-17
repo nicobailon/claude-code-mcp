@@ -136,6 +136,47 @@ describe('Claude Code MCP E2E Tests', () => {
       });
 
       expect(response).toBeTruthy();
+
+      // Verify debug logs were captured in stderr
+      expect(client.stderrOutput).toContain('[Debug] Handling CallToolRequest');
+      expect(client.stderrOutput).toContain('[Debug] Attempting to execute Claude CLI');
+      expect(client.stderrOutput).toContain(`[Debug] Using workFolder as CWD: ${testDir}`);
+      expect(client.stderrOutput).toContain('Debug test prompt');
+    });
+  });
+
+  describe('Orchestrator Mode', () => {
+    it('should spawn child process with correct environment in orchestrator mode', async () => {
+      // Create a new orchestrator mode client
+      const orchestratorClient = new MCPTestClient(serverPath, {
+        MCP_ORCHESTRATOR_MODE: 'true',
+        CLAUDE_CLI_NAME: '/tmp/claude-code-test-mock/claudeMocked',
+        MCP_CLAUDE_DEBUG: 'true'
+      });
+      
+      await orchestratorClient.connect();
+      
+      // Call the tool with check_env prompt to get environment variables
+      const response = await orchestratorClient.callTool('claude_code', {
+        prompt: 'check_env',
+        workFolder: testDir,
+      });
+      
+      // Check response format
+      expect(response).toBeTruthy();
+      expect(response[0].type).toBe('text');
+      
+      const responseText = response[0].text;
+      
+      // Verify orchestrator variables were properly removed/modified in the child process
+      expect(responseText).toContain('Environment Variables in Mock:');
+      expect(responseText).toContain('MCP_ORCHESTRATOR_MODE_IN_MOCK=');
+      expect(responseText).not.toContain('MCP_ORCHESTRATOR_MODE_IN_MOCK=true');
+      expect(responseText).toContain('CLAUDE_CLI_NAME_IN_MOCK=');
+      expect(responseText).toContain('MCP_CLAUDE_DEBUG_IN_MOCK=false');
+      
+      // Cleanup
+      await orchestratorClient.disconnect();
     });
   });
 });

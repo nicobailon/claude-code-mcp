@@ -97,10 +97,12 @@ describe('Orchestrator Mode', () => {
   });
 
   describe('Environment variable handling for child processes', () => {
-    it('should modify environment variables correctly in orchestrator mode', () => {
+    it('should modify environment variables correctly in orchestrator mode activated by MCP_ORCHESTRATOR_MODE', () => {
       // Enable orchestrator mode
       process.env.MCP_ORCHESTRATOR_MODE = 'true';
       process.env.CLAUDE_CLI_PATH = '/path/to/claude';
+      process.env.CLAUDE_CLI_NAME = 'some-custom-name';
+      process.env.MCP_CLAUDE_DEBUG = 'true';
       
       // Create a new server instance
       const testServer = new ClaudeCodeServer();
@@ -111,7 +113,28 @@ describe('Orchestrator Mode', () => {
       
       // Verify environment modifications for child processes
       expect(childEnv.MCP_ORCHESTRATOR_MODE).toBe(undefined); // Should be removed
+      expect(childEnv.CLAUDE_CLI_NAME).toBe(undefined); // Should be removed
+      expect(childEnv.MCP_CLAUDE_DEBUG).toBe('false'); // Should be set to false
       expect(childEnv.CLAUDE_CLI_PATH).toBe(process.env.CLAUDE_CLI_PATH); // Should be preserved
+    });
+
+    it('should modify environment variables correctly in orchestrator mode activated by CLAUDE_CLI_NAME', () => {
+      // Enable orchestrator mode via CLAUDE_CLI_NAME containing "orchestrator"
+      process.env.CLAUDE_CLI_NAME = 'claude-orchestrator';
+      delete process.env.MCP_ORCHESTRATOR_MODE;
+      process.env.MCP_CLAUDE_DEBUG = 'true';
+      
+      // Create a new server instance
+      const testServer = new ClaudeCodeServer();
+      
+      // Call the method that would spawn child processes
+      // We'll check if it's preparing environment variables correctly
+      const childEnv = testServer['prepareEnvironmentForChild']();
+      
+      // Verify environment modifications for child processes
+      expect(childEnv.CLAUDE_CLI_NAME).toBe(undefined); // Should be removed
+      expect(childEnv.MCP_ORCHESTRATOR_MODE).toBe(undefined); // Should be undefined
+      expect(childEnv.MCP_CLAUDE_DEBUG).toBe('false'); // Should be set to false
     });
 
     it('should not modify environment variables when not in orchestrator mode', () => {
@@ -119,6 +142,7 @@ describe('Orchestrator Mode', () => {
       delete process.env.MCP_ORCHESTRATOR_MODE;
       process.env.CLAUDE_CLI_NAME = 'claude';
       process.env.TEST_VAR = 'test_value';
+      process.env.MCP_CLAUDE_DEBUG = 'true';
       
       // Create a new server instance
       const testServer = new ClaudeCodeServer();
@@ -128,6 +152,9 @@ describe('Orchestrator Mode', () => {
       
       // Verify environment is not modified
       expect(childEnv.TEST_VAR).toBe('test_value');
+      expect(childEnv.CLAUDE_CLI_NAME).toBe('claude'); // Preserved
+      expect(childEnv.MCP_CLAUDE_DEBUG).toBe('true'); // Preserved
+      
       // Environment should be essentially passed through
       expect(Object.keys(childEnv).length).toBeGreaterThanOrEqual(Object.keys(process.env).length);
     });

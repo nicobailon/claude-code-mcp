@@ -23,6 +23,7 @@ export class MCPTestClient extends EventEmitter {
     reject: (error: Error) => void;
   }>();
   private buffer = '';
+  public stderrOutput = '';
 
   constructor(private serverPath: string, private env: Record<string, string> = {}) {
     super();
@@ -40,7 +41,9 @@ export class MCPTestClient extends EventEmitter {
       });
 
       this.server.stderr?.on('data', (data) => {
-        console.error('Server stderr:', data.toString());
+        const output = data.toString();
+        this.stderrOutput += output;
+        console.error('Server stderr:', output);
       });
 
       this.server.on('error', (error) => {

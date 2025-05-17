@@ -83,4 +83,43 @@ describe('Version Print on First Use', () => {
     const thirdVersionCall = findVersionCall(consoleErrorSpy.mock.calls);
     expect(thirdVersionCall).toBeUndefined();
   });
+
+  it('should include orchestrator mode indicator in version print when in orchestrator mode', async () => {
+    // Create a new client with orchestrator mode
+    const orchestratorClient = new MCPTestClient(serverPath, {
+      CLAUDE_CLI_NAME: '/tmp/claude-code-test-mock/claudeMocked',
+      MCP_ORCHESTRATOR_MODE: 'true'
+    });
+    
+    // Clear previous console output
+    consoleErrorSpy.mockClear();
+    
+    // Connect the orchestrator client
+    await orchestratorClient.connect();
+    
+    // First tool call with orchestrator mode
+    await orchestratorClient.callTool('claude_code', {
+      prompt: 'echo "orchestrator test"',
+      workFolder: testDir,
+    });
+    
+    // Find the version print in the console.error calls
+    const findOrchestratorVersionCall = (calls: any[][]) => {
+      return calls.find(call => {
+        const str = call[1] || call[0];
+        return typeof str === 'string' && 
+               str.includes('claude_code v') && 
+               str.includes('started at') &&
+               str.includes('[ORCHESTRATOR MODE]');
+      });
+    };
+    
+    // Check that version was printed with orchestrator mode indicator
+    const versionCall = findOrchestratorVersionCall(consoleErrorSpy.mock.calls);
+    expect(versionCall).toBeDefined();
+    expect(versionCall![1]).toMatch(/claude_code v[0-9]+\.[0-9]+\.[0-9]+ started at \d{4}-\d{2}-\d{2}T.* \[ORCHESTRATOR MODE\]/);
+    
+    // Cleanup
+    await orchestratorClient.disconnect();
+  });
 });
