@@ -18,8 +18,41 @@ import { readFileSync } from 'node:fs';
 // Server version - update this when releasing new versions
 const SERVER_VERSION = "1.10.12";
 
-// Define debugMode globally using const
+// Define global mode variables
 const debugMode = process.env.MCP_CLAUDE_DEBUG === 'true';
+const isOrchestratorMode = process.env.CLAUDE_ORCHESTRATOR_MODE === 'true' || 
+                          !!process.env.BASH_MAX_TIMEOUT_MS;
+
+const getOrchestratorSystemPrompt = (): string => {
+  if (!isOrchestratorMode) return '';
+  return `
+[ORCHESTRATOR MODE ACTIVE]
+
+You are a Claude Code Orchestrator with meta-agent capabilities:
+
+🎭 ORCHESTRATION FEATURES:
+• Multi-step workflow breakdown and execution
+• Task delegation to clean Claude Code instances  
+• Extended timeout support for complex operations
+• Unified result aggregation and progress tracking
+
+⚡ EXECUTION PATTERNS:
+• Sequential: Plan → Execute → Verify → Report
+• Parallel: Multi-directory operations
+• Conditional: Deploy only if tests pass
+• Recovery: Validation and rollback strategies
+
+🛠️ DELEGATION FORMAT:
+When breaking down tasks, use:
+\`\`\`
+Your work folder is /absolute/path/to/project
+
+[Atomic task with clear success criteria]
+\`\`\`
+
+Remember: Each delegated task runs in a clean environment without orchestration tools.
+`;
+};
 
 // Track if this is the first tool use for version printing
 let isFirstToolUse = true;
@@ -153,12 +186,19 @@ export class ClaudeCodeServer {
 
     this.server = new Server(
       {
-        name: 'claude_code',
-        version: '1.0.0',
+        name: isOrchestratorMode ? 'claude_code_orchestrator' : 'claude_code',
+        version: SERVER_VERSION,
       },
       {
         capabilities: {
-          tools: {},
+          tools: {
+            orchestration: isOrchestratorMode ? {
+              multiStep: true,
+              timeoutManagement: true,
+              workflowPlanning: true,
+              metaAgentCapable: true
+            } : undefined
+          },
         },
       }
     );
@@ -181,9 +221,34 @@ export class ClaudeCodeServer {
       tools: [
         {
           name: 'claude_code',
-          description: `Claude Code Agent: Your versatile multi-modal assistant for code, file, Git, and terminal operations via Claude CLI. Use \`workFolder\` for contextual execution.
+          description: `Claude Code ${isOrchestratorMode ? 'Orchestrator' : 'Agent'}: ${isOrchestratorMode ? 'Meta-agent for complex multi-step workflows.' : 'Your versatile multi-modal assistant for code, file, Git, and terminal operations via Claude CLI.'} Use \`workFolder\` for contextual execution.
 
-• File ops: Create, read, (fuzzy) edit, move, copy, delete, list files, analyze/ocr images, file content analysis
+${isOrchestratorMode ? `🎭 ORCHESTRATION CAPABILITIES:
+• Workflow planning and task decomposition
+• Sequential and parallel task execution
+• Extended timeout management (up to 30 minutes)
+• Cross-directory and multi-repo operations
+• Automated verification and error recovery
+
+⚡ DELEGATION PATTERNS:
+• File operations: Create → Test → Commit → Deploy
+• Feature development: Setup → Code → Test → Review → Merge
+• Infrastructure: Provision → Configure → Validate → Monitor
+• Bug fixes: Reproduce → Fix → Test → Verify → Document
+
+🛠️ ORCHESTRATION PARAMETERS:
+• workFolder: Target directory (required for file operations)
+• orchestrationMode: 'sequential' | 'parallel' | 'conditional'
+• timeout: Custom timeout in milliseconds
+• verificationSteps: Include validation after major operations
+
+**Best Practices:**
+1. Always specify workFolder for file operations
+2. Break complex tasks into atomic, executable steps
+3. Include verification and rollback strategies
+4. Use timeouts appropriately for operation complexity
+5. Plan error recovery for critical workflows
+` : `• File ops: Create, read, (fuzzy) edit, move, copy, delete, list files, analyze/ocr images, file content analysis
     └─ e.g., "Create /tmp/log.txt with 'system boot'", "Edit main.py to replace 'debug_mode = True' with 'debug_mode = False'", "List files in /src", "Move a specific section somewhere else"
 
 • Code: Generate / analyse / refactor / fix
@@ -212,20 +277,34 @@ export class ClaudeCodeServer {
 5. If workFolder is set to the project path, there is no need to repeat that path in the prompt and you can use relative paths for files.
 6. Claude Code is really good at complex multi-step file operations and refactorings and faster than your native edit features.
 7. Combine file operations, README updates, and Git commands in a sequence.
-8. Claude can do much more, just ask it!
+8. Claude can do much more, just ask it!`}
 
+Example: ${isOrchestratorMode ? '"Plan and execute: Create auth system, run tests, commit changes, create PR for /path/to/project"' : '"Create a new React component, write tests, update the docs."'}
         `,
           inputSchema: {
             type: 'object',
             properties: {
               prompt: {
                 type: 'string',
-                description: 'The detailed natural language prompt for Claude to execute.',
+                description: 'The orchestration prompt or specific task instruction.',
               },
               workFolder: {
                 type: 'string',
-                description: 'Mandatory when using file operations or referencing any file. The working directory for the Claude CLI execution. Must be an absolute path.',
+                description: 'Target directory for operations. Mandatory for file/git operations. Must be an absolute path.',
               },
+              orchestrationMode: {
+                type: 'string',
+                enum: ['sequential', 'parallel', 'conditional'],
+                description: 'Execution pattern for multi-step operations. Optional.',
+              },
+              timeout: {
+                type: 'number',
+                description: 'Custom timeout in milliseconds for this operation. Optional.',
+              },
+              verificationSteps: {
+                type: 'boolean',
+                description: 'Include verification after each major step. Optional.',
+              }
             },
             required: ['prompt'],
           },
@@ -261,13 +340,21 @@ export class ClaudeCodeServer {
         throw new McpError(ErrorCode.InvalidParams, 'Missing or invalid required parameter: prompt (must be an object with a string "prompt" property) for claude_code tool');
       }
 
+      // Extract orchestration parameters
+      const { 
+        workFolder, 
+        orchestrationMode,
+        timeout: customTimeout, 
+        verificationSteps 
+      } = toolArguments;
+
       // Determine the working directory
       let effectiveCwd = homedir(); // Default CWD is user's home directory
 
       // Check if workFolder is provided in the tool arguments
-      if (toolArguments.workFolder && typeof toolArguments.workFolder === 'string') {
-        const resolvedCwd = pathResolve(toolArguments.workFolder);
-        debugLog(`[Debug] Specified workFolder: ${toolArguments.workFolder}, Resolved to: ${resolvedCwd}`);
+      if (workFolder && typeof workFolder === 'string') {
+        const resolvedCwd = pathResolve(workFolder);
+        debugLog(`[Debug] Specified workFolder: ${workFolder}, Resolved to: ${resolvedCwd}`);
 
         // Check if the resolved path exists
         if (existsSync(resolvedCwd)) {
@@ -280,23 +367,44 @@ export class ClaudeCodeServer {
         debugLog(`[Debug] No workFolder provided, using default CWD: ${effectiveCwd}`);
       }
 
+      // Construct enhanced prompt
+      let enhancedPrompt = prompt;
+
+      // Print tool info on first use
+      if (isFirstToolUse) {
+        const versionInfo = `claude_code v${SERVER_VERSION} started at ${serverStartupTime}`;
+        console.error(versionInfo);
+        isFirstToolUse = false;
+      }
+
+      // Add orchestrator system prompt if in orchestrator mode
+      if (isOrchestratorMode) {
+        enhancedPrompt = getOrchestratorSystemPrompt() + '\n\n' + enhancedPrompt;
+      }
+
+      // Add orchestration directives
+      if (orchestrationMode) {
+        enhancedPrompt = `[ORCHESTRATION MODE: ${orchestrationMode}]\n\n${enhancedPrompt}`;
+      }
+
+      if (verificationSteps) {
+        enhancedPrompt += '\n\n[VERIFICATION REQUIRED]: Include validation steps after each major operation.';
+      }
+
+      // Use custom timeout or environment default
+      const executionTimeout = customTimeout || 
+        parseInt(process.env.BASH_MAX_TIMEOUT_MS || '1800000');
+
       try {
-        debugLog(`[Debug] Attempting to execute Claude CLI with prompt: "${prompt}" in CWD: "${effectiveCwd}"`);
+        debugLog(`[Debug] Attempting to execute Claude CLI with prompt: "${enhancedPrompt}" in CWD: "${effectiveCwd}"`);
 
-        // Print tool info on first use
-        if (isFirstToolUse) {
-          const versionInfo = `claude_code v${SERVER_VERSION} started at ${serverStartupTime}`;
-          console.error(versionInfo);
-          isFirstToolUse = false;
-        }
-
-        const claudeProcessArgs = ['--dangerously-skip-permissions', '-p', prompt];
+        const claudeProcessArgs = ['--dangerously-skip-permissions', '-p', enhancedPrompt];
         debugLog(`[Debug] Invoking Claude CLI: ${this.claudeCliPath} ${claudeProcessArgs.join(' ')}`);
 
         const { stdout, stderr } = await spawnAsync(
           this.claudeCliPath, // Run the Claude CLI directly
           claudeProcessArgs, // Pass the arguments
-          { timeout: executionTimeoutMs, cwd: effectiveCwd }
+          { timeout: executionTimeout, cwd: effectiveCwd }
         );
 
         debugLog('[Debug] Claude CLI stdout:', stdout.trim());
@@ -320,7 +428,7 @@ export class ClaudeCodeServer {
 
         if (error.signal === 'SIGTERM' || (error.message && error.message.includes('ETIMEDOUT')) || (error.code === 'ETIMEDOUT')) {
           // Reverting to InternalError due to lint issues, but with a specific timeout message.
-          throw new McpError(ErrorCode.InternalError, `Claude CLI command timed out after ${executionTimeoutMs / 1000}s. Details: ${errorMessage}`);
+          throw new McpError(ErrorCode.InternalError, `Claude CLI command timed out after ${executionTimeout / 1000}s. Details: ${errorMessage}`);
         }
         // ErrorCode.ToolCallFailed should be ErrorCode.InternalError or a more specific execution error if available
         throw new McpError(ErrorCode.InternalError, `Claude CLI execution failed: ${errorMessage}`);

@@ -220,6 +220,66 @@ This example illustrates `claude_code` handling a more complex, multi-step task,
 
 **CRITICAL: Remember to provide Current Working Directory (CWD) context in your prompts for file system or git operations (e.g., `"Your work folder is /path/to/project\n\n...your command..."`).**
 
+## 🎭 Orchestrator Mode
+
+The Claude Code MCP server supports an enhanced orchestrator mode for meta-agent workflows:
+
+### Setup
+```bash
+# Create orchestrator environment
+python -m venv ~/.venvs/claude-orchestrator
+source ~/.venvs/claude-orchestrator/bin/activate
+npm install -g @anthropic-ai/claude-code
+
+# Install claude-code-mcp
+npm install -g @nicobailon/claude-code-mcp
+
+# Configure with extended timeouts
+echo '{
+  "mcpServers": {
+    "claude_code": {
+      "type": "stdio",
+      "command": "claude-code-mcp",
+      "env": {
+        "CLAUDE_ORCHESTRATOR_MODE": "true",
+        "BASH_DEFAULT_TIMEOUT_MS": "300000",
+        "BASH_MAX_TIMEOUT_MS": "1800000"
+      }
+    }
+  }
+}' > ~/.claude.json
+```
+
+### Usage
+```bash
+# Create helper script
+cat > ~/bin/claude-orchestrator << 'EOF'
+#!/bin/bash
+source ~/.venvs/claude-orchestrator/bin/activate
+export CLAUDE_ORCHESTRATOR_MODE=true
+export BASH_DEFAULT_TIMEOUT_MS=300000
+export BASH_MAX_TIMEOUT_MS=1800000
+claude "$@"
+EOF
+chmod +x ~/bin/claude-orchestrator
+
+# Use orchestrator
+claude-orchestrator
+```
+
+### Orchestration Examples
+- **Feature Development**: "Plan and implement user authentication with tests for /path/to/project"
+- **Multi-repo Operations**: "Update shared types across frontend and backend repositories"
+- **Release Workflows**: "Version bump, changelog update, tests, commit, and tag release"
+- **Infrastructure Setup**: "Initialize project with Docker, CI/CD, and documentation"
+
+### Orchestration Parameters
+When using the claude_code tool in orchestrator mode, you can specify additional parameters:
+- `orchestrationMode`: The execution pattern ("sequential", "parallel", or "conditional")
+- `timeout`: Custom timeout in milliseconds for the operation
+- `verificationSteps`: Set to true to include validation after major operations
+- `workFolder`: Required for file operations
+
 ## Troubleshooting
 
 - **"Command not found" (claude-code-mcp):** If installed globally, ensure the npm global bin directory is in your system's PATH. If using `npx`, ensure `npx` itself is working.
@@ -265,6 +325,9 @@ The server's behavior can be customized using these environment variables:
 - `CLAUDE_CLI_PATH`: Absolute path to the Claude CLI executable.
   - Default: Checks `~/.claude/local/claude`, then falls back to `claude` (expecting it in PATH).
 - `MCP_CLAUDE_DEBUG`: Set to `true` for verbose debug logging from this MCP server. Default: `false`.
+- `CLAUDE_ORCHESTRATOR_MODE`: Set to `true` to enable orchestrator mode. Default: `false`.
+- `BASH_MAX_TIMEOUT_MS`: Maximum timeout in milliseconds for bash commands (also activates orchestrator mode). Default: `1800000` (30 minutes).
+- `BASH_DEFAULT_TIMEOUT_MS`: Default timeout for bash commands in orchestrator mode. Default: `300000` (5 minutes).
 
 These can be set in your shell environment or within the `env` block of your `mcp.json` server configuration (though the `env` block in `mcp.json` examples was removed for simplicity, it's still a valid way to set them for the server process if needed).
 
