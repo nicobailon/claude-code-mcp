@@ -392,7 +392,7 @@ Example: ${isOrchestratorMode ? '"Plan and execute: Create auth system, run test
       }
 
       // Use custom timeout or environment default
-      const executionTimeout = customTimeout || 
+      const executionTimeout: number = (customTimeout as number) || 
         parseInt(process.env.BASH_MAX_TIMEOUT_MS || '1800000');
 
       try {
