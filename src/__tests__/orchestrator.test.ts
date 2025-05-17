@@ -1,11 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, beforeAll } from 'vitest';
 import * as path from 'node:path';
 import { homedir } from 'node:os';
+import { ensureTestClaude } from './utils/test-helpers';
 
 // Direct tests of orchestrator detection and behavior without mocking
 describe('Orchestrator Mode Detection and Behavior', () => {
   // Save original environment and modules
   const originalEnv = { ...process.env };
+  
+  // Ensure test Claude CLI exists
+  beforeAll(() => {
+    ensureTestClaude();
+  });
   
   // Reset environment after each test
   afterEach(() => {
@@ -77,6 +83,11 @@ describe('Orchestrator System Prompt', () => {
   // Save original environment
   const originalEnv = { ...process.env };
   
+  // Ensure test Claude CLI exists
+  beforeAll(() => {
+    ensureTestClaude();
+  });
+  
   // Reset environment after each test
   afterEach(() => {
     process.env = { ...originalEnv };
@@ -126,6 +137,11 @@ describe('Orchestrator System Prompt', () => {
 // Tests for environment cleaning in orchestrator mode
 describe('Orchestrator Environment Cleaning', () => {
   const originalEnv = { ...process.env };
+  
+  // Ensure test Claude CLI exists
+  beforeAll(() => {
+    ensureTestClaude();
+  });
   
   beforeEach(() => {
     // Clear any mocks and modules

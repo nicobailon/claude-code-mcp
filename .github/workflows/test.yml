@@ -27,6 +27,9 @@ jobs:
     - name: Build
       run: npm run build
       
+    - name: Set up test Claude CLI
+      run: bash .github/workflows/setup-claude-cli.sh
+      
     - name: Detect orchestrator feature branch
       id: detect-branch
       run: |
