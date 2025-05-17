@@ -85,38 +85,94 @@ To use a custom Claude CLI binary name, you can specify the environment variable
     },
 ```
 
-### Orchestrator Configuration
+## Orchestrator Setup with Virtual Environments
 
-To use claude-code-mcp in orchestrator mode, configure it with the orchestrator environment:
+The Claude Code MCP tool supports an advanced "agents in agents" architecture through orchestrator mode, enabling meta-orchestration where one Claude instance coordinates multiple worker instances.
+
+### Orchestrator Architecture
+
+The orchestrator pattern uses a dedicated Claude environment with enhanced capabilities:
+
+<img src="assets/agents_in_agents_meme.jpg" alt="Agents in Agents Meme" width="300">
+
+- **Meta-orchestration**: Claude managing multiple Claude instances
+- **Environment isolation**: Clean main environment, enhanced orchestrator
+- **Task decomposition**: Break complex workflows into atomic operations
+- **No recursion**: Worker instances cannot spawn additional instances
+
+### 1. Create Orchestrator Environment
+
+```bash
+# Create a named virtual environment for orchestration
+claude --name claude-orchestrator
+
+# Switch to the orchestrator environment
+claude --env claude-orchestrator
+```
+
+### 2. Configure Orchestrator Environment
+
+Create or edit `.claude.json` in the orchestrator environment:
 
 ```json
-    "claude-code-mcp": {
+{
+  "mcpServers": {
+    "claude_code": {
       "command": "npx",
       "args": [
-        "-y",
+        "-y", 
         "@steipete/claude-code-mcp@latest"
       ],
       "env": {
         "MCP_ORCHESTRATOR_MODE": "true"
       }
-    },
+    }
+  }
+}
 ```
 
-Orchestrator mode enables:
-- Task delegation capabilities 
-- Recursion prevention
-- Enhanced orchestration prompting
+### 3. Keep Main Environment Clean
 
-Alternatively, you can create a dedicated Claude Code environment for orchestration and use it in your `.claude.json`:
+Your default Claude Code environment should remain without orchestrator capabilities:
+- Standard timeouts
+- Clean configuration
+- No orchestrator privileges
+
+### 4. Usage Pattern
 
 ```bash
-# Create a dedicated Claude orchestrator environment
-claude --name claude-orchestrator
+# Switch to orchestrator for complex workflows
+claude --env claude-orchestrator
 
-# Configure .claude.json to use this environment and add claude-code-mcp to it
+# Example orchestrator prompt:
+"Create auth system in /path/to/project:
+1. Generate JWT middleware in src/middleware/auth.js
+2. Create user model with password hashing
+3. Add auth routes to API
+4. Write unit tests
+5. Run test suite
+6. Commit changes with descriptive message
+7. Create GitHub PR"
+
+# Switch back to main environment for regular tasks
+claude  # or claude --env default
 ```
 
-This setup creates a meta-agent architecture where the orchestrator can delegate tasks to standard Claude Code instances while maintaining separation of concerns.
+### Helper Scripts
+
+Create shortcuts for easy environment switching:
+
+```bash
+# ~/.bashrc or ~/.zshrc
+alias claude-orchestrator='claude --env claude-orchestrator'
+alias claude-main='claude --env default'
+```
+
+### Orchestrator Troubleshooting
+
+- **Recursion warnings**: Ensure main environment has no orchestrator mode enabled
+- **Permission errors**: Verify `--dangerously-skip-permissions` was accepted in both environments
+- **Environment confusion**: Check which Claude environment is active with `claude env`
 
 ## Important First-Time Setup: Accepting Permissions
 
@@ -233,6 +289,7 @@ This server, through its unified `claude_code` tool, unlocks a wide range of pow
 
 6.  **Complex Multi-Step Workflows:**
     -   Automate version bumps, update changelogs, and tag releases: `"Your work folder is /Users/steipete/my_project\n\nFollow these steps: 1. Update the version in package.json to 2.5.0. 2. Add a new section to CHANGELOG.md for version 2.5.0 with the heading '### Added' and list 'New feature X'. 3. Stage package.json and CHANGELOG.md. 4. Commit with message 'release: version 2.5.0'. 5. Push the commit. 6. Create and push a git tag v2.5.0."`
+    -   For even more complex workflows across multiple files, consider using the [Orchestrator Setup](#orchestrator-setup-with-virtual-environments) which enables "agents in agents" architecture.
 
     <img src="assets/multistep_example.png" alt="Complex multi-step operation example" width="50%">
 
