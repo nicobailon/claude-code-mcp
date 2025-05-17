@@ -222,7 +222,7 @@ This example illustrates `claude_code` handling a more complex, multi-step task,
 
 ## 🎭 Orchestrator Mode
 
-The Claude Code MCP server supports an enhanced orchestrator mode for meta-agent workflows:
+The Claude Code MCP server supports an enhanced orchestrator mode for meta-agent workflows, using natural language orchestration:
 
 ### Setup
 ```bash
@@ -268,17 +268,17 @@ claude-orchestrator
 ```
 
 ### Orchestration Examples
-- **Feature Development**: "Plan and implement user authentication with tests for /path/to/project"
-- **Multi-repo Operations**: "Update shared types across frontend and backend repositories"
-- **Release Workflows**: "Version bump, changelog update, tests, commit, and tag release"
-- **Infrastructure Setup**: "Initialize project with Docker, CI/CD, and documentation"
+- **Feature Development**: "Plan and implement user authentication with tests for /path/to/project. Break down the task into logical steps, including validation after each major component is complete."
+- **Multi-repo Operations**: "Update shared types across frontend and backend repositories. Please organize this as a multi-step process with proper validation between steps."
+- **Release Workflows**: "Version bump, changelog update, tests, commit, and tag release. Make sure to verify each step before proceeding."
+- **Infrastructure Setup**: "Initialize project with Docker, CI/CD, and documentation. Provide a detailed plan and execute it step by step."
 
 ### Orchestration Parameters
-When using the claude_code tool in orchestrator mode, you can specify additional parameters:
-- `orchestrationMode`: The execution pattern ("sequential", "parallel", or "conditional")
+When using the claude_code tool in orchestrator mode, only the following parameters are needed:
 - `timeout`: Custom timeout in milliseconds for the operation
-- `verificationSteps`: Set to true to include validation after major operations
 - `workFolder`: Required for file operations
+
+Express your orchestration needs directly in natural language prompts rather than through artificial parameters. Claude will intelligently break down complex tasks into appropriate steps.
 
 ## Troubleshooting
 
@@ -325,7 +325,7 @@ The server's behavior can be customized using these environment variables:
 - `CLAUDE_CLI_PATH`: Absolute path to the Claude CLI executable.
   - Default: Checks `~/.claude/local/claude`, then falls back to `claude` (expecting it in PATH).
 - `MCP_CLAUDE_DEBUG`: Set to `true` for verbose debug logging from this MCP server. Default: `false`.
-- `CLAUDE_ORCHESTRATOR_MODE`: Set to `true` to enable orchestrator mode. Default: `false`.
+- `CLAUDE_ORCHESTRATOR_MODE`: Set to `true` to enable natural language orchestration mode. Default: `false`.
 - `BASH_MAX_TIMEOUT_MS`: Maximum timeout in milliseconds for bash commands (also activates orchestrator mode). Default: `1800000` (30 minutes).
 - `BASH_DEFAULT_TIMEOUT_MS`: Default timeout for bash commands in orchestrator mode. Default: `300000` (5 minutes).
 

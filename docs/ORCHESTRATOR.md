@@ -1,7 +1,7 @@
 # Claude Code Orchestrator Guide
 
 ## Overview
-The Claude Code Orchestrator enables meta-agent workflows where Claude can plan and execute complex multi-step operations by delegating tasks to clean Claude Code instances.
+The Claude Code Orchestrator enables meta-agent workflows where Claude can plan and execute complex multi-step operations using natural language orchestration.
 
 ## Architecture
 ```
@@ -11,96 +11,67 @@ The Claude Code Orchestrator enables meta-agent workflows where Claude can plan 
 
 ## Key Features
 
-1. **Environment Isolation**: 
+1. **Natural Language Orchestration**: 
+   - Express complex workflows through natural language instructions
+   - No artificial parameters or constraints
+   - Let Claude's intelligence handle task decomposition
+
+2. **Environment Isolation**: 
    - Orchestrator runs with MCP tools and enhanced capabilities
    - Execution environments run clean without orchestration overhead
    - Prevents recursion loops with clear separation of concerns
 
-2. **Timeout Management**: 
+3. **Timeout Management**: 
    - Extended timeouts for complex operations (up to 30 minutes)
    - Per-operation timeout customization
    - Default timeouts configurable via environment variables
 
-3. **Workflow Planning**: 
-   - Multi-step task decomposition
-   - Sequential and parallel execution patterns
-   - Conditional execution based on operation success
+4. **Intelligent Workflow Planning**: 
+   - Automatic multi-step task decomposition
+   - Appropriate execution patterns based on task requirements
+   - Claude determines optimal execution strategy
 
-4. **Error Recovery**: 
-   - Built-in verification and validation
-   - Rollback capabilities for failed operations
+5. **Error Recovery and Validation**: 
+   - Built-in verification and validation based on instructions
+   - Rollback capabilities for failed operations when described
    - Progress tracking and reporting
 
-5. **Recursion Prevention**: 
+6. **Recursion Prevention**: 
    - Main environments can't spawn orchestrators
    - Clean delegation boundaries
    - Safe execution environment isolation
 
-## Usage Patterns
+## Natural Language Orchestration Patterns
 
-### Sequential Execution (Default)
-```
-"orchestrationMode": "sequential"
-```
-Tasks are executed one after another, with each task depending on the success of the previous task. This is the default mode and is suitable for most workflows.
+### Sequential Execution
+Simply describe your steps in order, and the orchestrator will execute them sequentially:
 
-Example:
-```json
-{
-  "prompt": "Setup new React project, add TypeScript support, and create basic components",
-  "workFolder": "/path/to/project",
-  "orchestrationMode": "sequential"
-}
+```
+"Please implement user authentication:
+1. First, create the authentication service 
+2. Then, add the login form components
+3. Next, implement the user session management
+4. Finally, add proper error handling and validation"
 ```
 
 ### Parallel Execution
-```
-"orchestrationMode": "parallel"
-```
-Tasks that don't depend on each other are executed simultaneously. This is useful for operations that can be performed independently, such as working with multiple repositories or running tests across different services.
+Indicate tasks that can be performed in parallel through your description:
 
-Example:
-```json
-{
-  "prompt": "Update the API version in both frontend and backend repositories",
-  "workFolder": "/path/to/main-project",
-  "orchestrationMode": "parallel"
-}
+```
+"Please update the API version across multiple repositories. 
+You can work on these updates concurrently since they don't depend on each other:
+- Update the version in the backend API
+- Update the client libraries
+- Update the documentation site"
 ```
 
 ### Conditional Execution
+Specify conditions and validation requirements in natural language:
+
 ```
-"orchestrationMode": "conditional"
+"Run the complete test suite and deploy to production ONLY if all tests pass. 
+If any tests fail, fix the issues before attempting deployment."
 ```
-Tasks are executed based on conditions and validation checks. This is useful for workflows where certain steps should only be executed if previous steps meet specific criteria.
-
-Example:
-```json
-{
-  "prompt": "Run tests and deploy to production only if all tests pass",
-  "workFolder": "/path/to/project",
-  "orchestrationMode": "conditional",
-  "verificationSteps": true
-}
-```
-
-## Verification and Validation
-
-For critical operations, you can enable automatic verification steps:
-
-```json
-{
-  "prompt": "Database migration for production",
-  "workFolder": "/path/to/project",
-  "verificationSteps": true
-}
-```
-
-When enabled, the orchestrator will:
-1. Execute small test operations before major changes
-2. Validate results after each major step
-3. Include rollback steps in the execution plan
-4. Perform additional safety checks
 
 ## Delegation Format
 
@@ -132,37 +103,40 @@ Each delegated task:
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `prompt` | string | The orchestration prompt or task instruction |
+| `prompt` | string | The orchestration prompt or task instruction (include all orchestration details here) |
 | `workFolder` | string | Target directory for operations (required for file operations) |
-| `orchestrationMode` | string | Execution pattern: `sequential`, `parallel`, or `conditional` |
 | `timeout` | number | Custom timeout in milliseconds |
-| `verificationSteps` | boolean | Enable validation after major operations |
 
 ## Best Practices
 
-1. **Atomic Tasks**
-   - Break complex operations into smaller, atomic tasks
-   - Each task should have clear success criteria
-   - Provide specific validation steps for critical operations
+1. **Natural Language Task Breakdown**
+   - Use clear, detailed language to describe complex operations
+   - Express workflow patterns directly in your instructions
+   - Include specific validation and verification requirements in your prompts
 
-2. **Error Handling**
-   - Include recovery strategies for critical tasks
-   - Define fallback approaches for error-prone operations
-   - Use conditional execution for risky operations
+2. **Task Clarity**
+   - Break complex operations into smaller, atomic tasks through your descriptions
+   - Each task should have clear success criteria explained in natural language
+   - Provide specific validation instructions for critical operations
 
-3. **Timeout Management**
+3. **Error Handling**
+   - Include recovery strategies for critical tasks in your prompt
+   - Describe fallback approaches for error-prone operations
+   - Express conditional execution requirements in plain language
+
+4. **Timeout Management**
    - Set appropriate timeouts based on task complexity
    - Allocate more time for operations with external dependencies
    - Consider network latency and service response times
 
-4. **Path and Context Clarity**
+5. **Path and Context Clarity**
    - Always provide absolute paths for file operations
-   - Include clear context in delegation prompts
+   - Include clear context in your orchestration prompts
    - Specify required environment details
 
-5. **Resource Management**
-   - Limit parallel operations to prevent resource contention
-   - Clean up temporary resources after task completion
+6. **Resource Management**
+   - Limit concurrent operations by specifying dependencies in your instructions
+   - Request cleanup of temporary resources after task completion
    - Be mindful of system resource usage during execution
 
 ## Troubleshooting
@@ -171,7 +145,7 @@ Each delegated task:
 
 1. **Timeout Errors**
    - Increase the timeout for the specific operation
-   - Break down the task into smaller steps
+   - Break down the task into smaller steps in your prompt
    - Check for external dependencies that might cause delays
 
 2. **File Operation Failures**
@@ -185,8 +159,8 @@ Each delegated task:
    - Ensure clean delegation boundaries
 
 4. **Task Delegation Errors**
-   - Make delegation prompts clear and specific
-   - Include all necessary context for the delegated task
+   - Make your instructions clear and specific
+   - Include all necessary context in your prompt
    - Specify success criteria clearly
 
 ### Logs and Debugging
@@ -201,7 +175,7 @@ This will provide detailed information about:
 - Task delegation and execution
 - Command timeouts and failures
 - Environment setup and configuration
-- Orchestration directives processing
+- Orchestration processing
 
 ## Security Considerations
 
@@ -218,7 +192,7 @@ This will provide detailed information about:
 3. **Resource Limits**
    - Hard timeouts prevent indefinite execution
    - Resource-intensive operations should be broken down
-   - Sequential execution is recommended for sensitive operations
+   - Sensitive operations should include proper verification steps
 
 ## Examples
 
@@ -226,10 +200,9 @@ This will provide detailed information about:
 
 ```json
 {
-  "prompt": "For the project at /path/to/my-app:\n1. Create a new feature branch called 'user-profile'\n2. Implement a user profile component\n3. Add tests for the component\n4. Create a PR with appropriate description",
+  "prompt": "For the project at /path/to/my-app:\n1. Create a new feature branch called 'user-profile'\n2. Implement a user profile component with proper validation\n3. Add comprehensive tests for the component\n4. Ensure all tests pass before proceeding\n5. Create a PR with appropriate description\n\nBreak this down into logical steps and validate each step before moving to the next.",
   "workFolder": "/path/to/my-app",
-  "orchestrationMode": "sequential",
-  "verificationSteps": true
+  "timeout": 1200000
 }
 ```
 
@@ -237,9 +210,9 @@ This will provide detailed information about:
 
 ```json
 {
-  "prompt": "Update API version from 1.0 to 2.0 in:\n- Backend API definitions\n- Frontend client code\n- Documentation site\n- Integration tests\nEnsure all changes are compatible.",
+  "prompt": "Update API version from 1.0 to 2.0 across multiple repositories:\n- Backend API definitions\n- Frontend client code\n- Documentation site\n- Integration tests\n\nYou can work on these updates in parallel since they don't depend on each other. After all updates are complete, run integration tests to ensure everything works together properly.",
   "workFolder": "/path/to/project-root",
-  "orchestrationMode": "sequential"
+  "timeout": 900000
 }
 ```
 
@@ -247,8 +220,8 @@ This will provide detailed information about:
 
 ```json
 {
-  "prompt": "Set up a new microservice project:\n1. Initialize repository with proper structure\n2. Set up Docker configuration\n3. Create GitHub Actions for CI/CD\n4. Configure linting and testing\n5. Add comprehensive documentation",
+  "prompt": "Set up a new microservice project following these steps in sequence:\n1. Initialize repository with proper structure\n2. Set up Docker configuration\n3. Create GitHub Actions for CI/CD\n4. Configure linting and testing\n5. Add comprehensive documentation\n\nAfter each step, verify that it works correctly before proceeding to the next step. If any step fails, fix the issues before continuing.",
   "workFolder": "/path/to/new-project",
-  "timeout": 900000
+  "timeout": 1800000
 }
 ```

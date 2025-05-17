@@ -30,27 +30,26 @@ const getOrchestratorSystemPrompt = (): string => {
 
 You are a Claude Code Orchestrator with meta-agent capabilities:
 
-🎭 ORCHESTRATION FEATURES:
-• Multi-step workflow breakdown and execution
-• Task delegation to clean Claude Code instances  
-• Extended timeout support for complex operations
-• Unified result aggregation and progress tracking
+🎭 ORCHESTRATION CAPABILITIES:
+• Intelligent workflow planning and breakdown of complex tasks
+• Natural language understanding of multi-step operations
+• Extended timeout support for demanding operations
+• Cross-directory and multi-repo coordination
 
-⚡ EXECUTION PATTERNS:
-• Sequential: Plan → Execute → Verify → Report
-• Parallel: Multi-directory operations
-• Conditional: Deploy only if tests pass
-• Recovery: Validation and rollback strategies
+⚡ WORKFLOW PATTERNS:
+• When given complex instructions, break down into logical steps
+• For larger tasks, create a plan before execution
+• Include validation steps after critical operations
+• Provide clear progress updates throughout execution
 
-🛠️ DELEGATION FORMAT:
-When breaking down tasks, use:
-\`\`\`
-Your work folder is /absolute/path/to/project
+🛠️ BEST PRACTICES:
+• Break complex tasks into atomic, executable steps
+• Validate results after significant operations
+• Plan error recovery for critical workflows
+• Keep the user informed of progress and completion
+• Use natural language to express complex instructions
 
-[Atomic task with clear success criteria]
-\`\`\`
-
-Remember: Each delegated task runs in a clean environment without orchestration tools.
+Remember to maintain clear context about the task's state and progress.
 `;
 };
 
@@ -224,30 +223,28 @@ export class ClaudeCodeServer {
           description: `Claude Code ${isOrchestratorMode ? 'Orchestrator' : 'Agent'}: ${isOrchestratorMode ? 'Meta-agent for complex multi-step workflows.' : 'Your versatile multi-modal assistant for code, file, Git, and terminal operations via Claude CLI.'} Use \`workFolder\` for contextual execution.
 
 ${isOrchestratorMode ? `🎭 ORCHESTRATION CAPABILITIES:
-• Workflow planning and task decomposition
-• Sequential and parallel task execution
-• Extended timeout management (up to 30 minutes)
+• Intelligent workflow planning and task decomposition
+• Adaptive execution of complex operations
+• Extended timeout support for demanding tasks (up to 30 minutes)
 • Cross-directory and multi-repo operations
-• Automated verification and error recovery
+• Natural language driven orchestration
 
-⚡ DELEGATION PATTERNS:
+⚡ WORKFLOW PATTERNS:
 • File operations: Create → Test → Commit → Deploy
 • Feature development: Setup → Code → Test → Review → Merge
 • Infrastructure: Provision → Configure → Validate → Monitor
 • Bug fixes: Reproduce → Fix → Test → Verify → Document
 
-🛠️ ORCHESTRATION PARAMETERS:
+🛠️ PARAMETERS:
 • workFolder: Target directory (required for file operations)
-• orchestrationMode: 'sequential' | 'parallel' | 'conditional'
 • timeout: Custom timeout in milliseconds
-• verificationSteps: Include validation after major operations
 
 **Best Practices:**
 1. Always specify workFolder for file operations
-2. Break complex tasks into atomic, executable steps
-3. Include verification and rollback strategies
-4. Use timeouts appropriately for operation complexity
-5. Plan error recovery for critical workflows
+2. Use clear, detailed natural language to describe complex tasks
+3. Include validation and error handling in your instructions
+4. Describe desired verification steps in your prompt
+5. Express your orchestration needs in natural language
 ` : `• File ops: Create, read, (fuzzy) edit, move, copy, delete, list files, analyze/ocr images, file content analysis
     └─ e.g., "Create /tmp/log.txt with 'system boot'", "Edit main.py to replace 'debug_mode = True' with 'debug_mode = False'", "List files in /src", "Move a specific section somewhere else"
 
@@ -279,7 +276,7 @@ ${isOrchestratorMode ? `🎭 ORCHESTRATION CAPABILITIES:
 7. Combine file operations, README updates, and Git commands in a sequence.
 8. Claude can do much more, just ask it!`}
 
-Example: ${isOrchestratorMode ? '"Plan and execute: Create auth system, run tests, commit changes, create PR for /path/to/project"' : '"Create a new React component, write tests, update the docs."'}
+Example: ${isOrchestratorMode ? '"Plan and execute: Create an authentication system with user registration, login endpoints, and JWT validation. Run tests, commit changes, and create a PR for review."' : '"Create a new React component, write tests, update the docs."'}
         `,
           inputSchema: {
             type: 'object',
@@ -292,18 +289,9 @@ Example: ${isOrchestratorMode ? '"Plan and execute: Create auth system, run test
                 type: 'string',
                 description: 'Target directory for operations. Mandatory for file/git operations. Must be an absolute path.',
               },
-              orchestrationMode: {
-                type: 'string',
-                enum: ['sequential', 'parallel', 'conditional'],
-                description: 'Execution pattern for multi-step operations. Optional.',
-              },
               timeout: {
                 type: 'number',
                 description: 'Custom timeout in milliseconds for this operation. Optional.',
-              },
-              verificationSteps: {
-                type: 'boolean',
-                description: 'Include verification after each major step. Optional.',
               }
             },
             required: ['prompt'],
@@ -340,12 +328,10 @@ Example: ${isOrchestratorMode ? '"Plan and execute: Create auth system, run test
         throw new McpError(ErrorCode.InvalidParams, 'Missing or invalid required parameter: prompt (must be an object with a string "prompt" property) for claude_code tool');
       }
 
-      // Extract orchestration parameters
+      // Extract parameters
       const { 
         workFolder, 
-        orchestrationMode,
-        timeout: customTimeout, 
-        verificationSteps 
+        timeout: customTimeout
       } = toolArguments;
 
       // Determine the working directory
@@ -382,14 +368,7 @@ Example: ${isOrchestratorMode ? '"Plan and execute: Create auth system, run test
         enhancedPrompt = getOrchestratorSystemPrompt() + '\n\n' + enhancedPrompt;
       }
 
-      // Add orchestration directives
-      if (orchestrationMode) {
-        enhancedPrompt = `[ORCHESTRATION MODE: ${orchestrationMode}]\n\n${enhancedPrompt}`;
-      }
-
-      if (verificationSteps) {
-        enhancedPrompt += '\n\n[VERIFICATION REQUIRED]: Include validation steps after each major operation.';
-      }
+      // No additional orchestration directives - using natural language
 
       // Use custom timeout or environment default
       const executionTimeout: number = (customTimeout as number) || 

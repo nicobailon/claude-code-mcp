@@ -21,11 +21,11 @@ const checks = [
   },
   {
     name: 'Enhanced tool description',
-    test: () => serverContent.includes('Orchestrator') && serverContent.includes('meta-agent')
+    test: () => serverContent.includes('Orchestrator') && serverContent.includes('Natural language driven orchestration')
   },
   {
-    name: 'Extended input schema',
-    test: () => serverContent.includes('orchestrationMode') && serverContent.includes('verificationSteps')
+    name: 'Simplified input schema',
+    test: () => !serverContent.includes('orchestrationMode') && !serverContent.includes('verificationSteps') && serverContent.includes('timeout')
   },
   {
     name: 'Timeout management',
