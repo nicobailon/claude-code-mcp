@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2025-05-17
+
+### Added
+- Orchestrator mode for meta-agent workflows with `MCP_ORCHESTRATOR_MODE` environment variable
+- Support for detecting orchestrator mode via `CLAUDE_CLI_NAME` containing "orchestrator"
+- Dynamic timeout configuration with `BASH_DEFAULT_TIMEOUT_MS` and `BASH_MAX_TIMEOUT_MS`
+- Custom timeout parameter in tool input schema
+- Recursion prevention for spawned instances when in orchestrator mode
+- Enhanced system prompt for orchestrator mode with task delegation guidance
+- Extended debugging with orchestrator mode indicators
+
+### Changed
+- Updated default timeout to 5 minutes (300000ms)
+- Made timeout handling more robust with environment variable configuration
+- Improved environment variable handling for spawned processes
+
 ## [1.10.12] - 2025-05-17
 
 - Fixed MCP server startup issue by ensuring process runs regardless of module detection

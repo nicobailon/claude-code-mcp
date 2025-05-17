@@ -16,10 +16,18 @@ import * as path from 'path';
 import { readFileSync } from 'node:fs';
 
 // Server version - update this when releasing new versions
-const SERVER_VERSION = "1.10.12";
+const SERVER_VERSION = "1.11.0";
 
 // Define debugMode globally using const
 const debugMode = process.env.MCP_CLAUDE_DEBUG === 'true';
+
+// Detect orchestrator mode
+const isOrchestratorMode = process.env.CLAUDE_CLI_NAME?.includes('orchestrator') || 
+                           process.env.MCP_ORCHESTRATOR_MODE === 'true';
+
+// Configure timeouts based on environment variables or defaults
+const defaultTimeout = parseInt(process.env.BASH_DEFAULT_TIMEOUT_MS || '300000'); // Default: 5 minutes
+const maxTimeout = parseInt(process.env.BASH_MAX_TIMEOUT_MS || '1800000');       // Default: 30 minutes
 
 // Track if this is the first tool use for version printing
 let isFirstToolUse = true;
@@ -88,16 +96,22 @@ export function findClaudeCli(): string {
 interface ClaudeCodeArgs {
   prompt: string;
   workFolder?: string;
+  timeout?: number;
 }
 
 // Ensure spawnAsync is defined correctly *before* the class
-export async function spawnAsync(command: string, args: string[], options?: { timeout?: number, cwd?: string }): Promise<{ stdout: string; stderr: string }> {
+export async function spawnAsync(command: string, args: string[], options?: { 
+  timeout?: number, 
+  cwd?: string,
+  env?: NodeJS.ProcessEnv 
+}): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     debugLog(`[Spawn] Running command: ${command} ${args.join(' ')}`);
     const process = spawn(command, args, {
       shell: false, // Reverted to false
       timeout: options?.timeout,
       cwd: options?.cwd,
+      env: options?.env,
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -175,13 +189,33 @@ export class ClaudeCodeServer {
   /**
    * Set up the MCP tool handlers
    */
+  /**
+   * Gets orchestrator-specific system prompt if in orchestrator mode
+   */
+  private getOrchestratorSystemPrompt(): string {
+    if (!isOrchestratorMode) return '';
+    
+    return `
+
+[ORCHESTRATOR MODE ACTIVE]
+You can break down complex tasks and execute them via delegated Claude Code instances.
+When delegating tasks, use this format:
+\`\`\`
+Your work folder is /absolute/path/to/project
+[Clear, atomic task instructions]
+\`\`\`
+You have extended timeouts (up to ${maxTimeout/60000} minutes) for complex operations.
+Focus on task decomposition and coordination rather than direct execution.
+`;
+  }
+
   private setupToolHandlers(): void {
     // Define available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
         {
           name: 'claude_code',
-          description: `Claude Code Agent: Your versatile multi-modal assistant for code, file, Git, and terminal operations via Claude CLI. Use \`workFolder\` for contextual execution.
+          description: `Claude Code Agent: Your versatile multi-modal assistant for code, file, Git, and terminal operations via Claude CLI. Use \`workFolder\` for contextual execution.${this.getOrchestratorSystemPrompt()}
 
 • File ops: Create, read, (fuzzy) edit, move, copy, delete, list files, analyze/ocr images, file content analysis
     └─ e.g., "Create /tmp/log.txt with 'system boot'", "Edit main.py to replace 'debug_mode = True' with 'debug_mode = False'", "List files in /src", "Move a specific section somewhere else"
@@ -226,6 +260,10 @@ export class ClaudeCodeServer {
                 type: 'string',
                 description: 'Mandatory when using file operations or referencing any file. The working directory for the Claude CLI execution. Must be an absolute path.',
               },
+              timeout: {
+                type: 'number',
+                description: `Custom timeout in milliseconds (max ${maxTimeout}). Optional.`,
+              },
             },
             required: ['prompt'],
           },
@@ -234,7 +272,13 @@ export class ClaudeCodeServer {
     }));
 
     // Handle tool calls
-    const executionTimeoutMs = 1800000; // 30 minutes timeout
+    // Helper function to get execution timeout
+    const getExecutionTimeout = (customTimeout?: number): number => {
+      if (customTimeout && customTimeout <= maxTimeout) {
+        return customTimeout;
+      }
+      return isOrchestratorMode ? maxTimeout : defaultTimeout;
+    };
 
     this.server.setRequestHandler(CallToolRequestSchema, async (args, call): Promise<ServerResult> => {
       debugLog('[Debug] Handling CallToolRequest:', args);
@@ -281,22 +325,41 @@ export class ClaudeCodeServer {
       }
 
       try {
-        debugLog(`[Debug] Attempting to execute Claude CLI with prompt: "${prompt}" in CWD: "${effectiveCwd}"`);
+        // Get custom timeout if provided
+        const customTimeout = toolArguments.timeout as number | undefined;
+        const executionTimeoutMs = getExecutionTimeout(customTimeout);
+        
+        debugLog(`[Debug] Attempting to execute Claude CLI with prompt: "${prompt}" in CWD: "${effectiveCwd}" (timeout: ${executionTimeoutMs}ms)`);
 
         // Print tool info on first use
         if (isFirstToolUse) {
           const versionInfo = `claude_code v${SERVER_VERSION} started at ${serverStartupTime}`;
-          console.error(versionInfo);
+          const modeInfo = isOrchestratorMode ? ' [ORCHESTRATOR MODE]' : '';
+          console.error(versionInfo + modeInfo);
           isFirstToolUse = false;
         }
 
         const claudeProcessArgs = ['--dangerously-skip-permissions', '-p', prompt];
         debugLog(`[Debug] Invoking Claude CLI: ${this.claudeCliPath} ${claudeProcessArgs.join(' ')}`);
 
+        // Create a clean environment to prevent recursion
+        const spawnEnv = { ...process.env };
+        
+        // Prevent recursion by removing orchestrator-specific variables
+        if (isOrchestratorMode) {
+          delete spawnEnv.CLAUDE_CLI_NAME;           // Use default claude CLI
+          delete spawnEnv.MCP_ORCHESTRATOR_MODE;     // Remove orchestrator mode
+          spawnEnv.MCP_CLAUDE_DEBUG = 'false';       // Reduce noise from spawned instances
+        }
+
         const { stdout, stderr } = await spawnAsync(
           this.claudeCliPath, // Run the Claude CLI directly
           claudeProcessArgs, // Pass the arguments
-          { timeout: executionTimeoutMs, cwd: effectiveCwd }
+          { 
+            timeout: executionTimeoutMs, 
+            cwd: effectiveCwd,
+            env: spawnEnv  // Use clean environment for spawned instances
+          }
         );
 
         debugLog('[Debug] Claude CLI stdout:', stdout.trim());
@@ -319,8 +382,12 @@ export class ClaudeCodeServer {
         }
 
         if (error.signal === 'SIGTERM' || (error.message && error.message.includes('ETIMEDOUT')) || (error.code === 'ETIMEDOUT')) {
+          // Get the timeout that was used
+          const customTimeout = toolArguments.timeout as number | undefined;
+          const usedTimeoutMs = getExecutionTimeout(customTimeout);
+          
           // Reverting to InternalError due to lint issues, but with a specific timeout message.
-          throw new McpError(ErrorCode.InternalError, `Claude CLI command timed out after ${executionTimeoutMs / 1000}s. Details: ${errorMessage}`);
+          throw new McpError(ErrorCode.InternalError, `Claude CLI command timed out after ${usedTimeoutMs / 1000}s. Details: ${errorMessage}`);
         }
         // ErrorCode.ToolCallFailed should be ErrorCode.InternalError or a more specific execution error if available
         throw new McpError(ErrorCode.InternalError, `Claude CLI execution failed: ${errorMessage}`);

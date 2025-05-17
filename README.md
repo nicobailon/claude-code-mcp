@@ -54,6 +54,12 @@ This MCP server provides one tool that can be used by LLMs to interact with Clau
 
 - `MCP_CLAUDE_DEBUG`: Enable debug logging (set to `true` for verbose output)
 
+- `MCP_ORCHESTRATOR_MODE`: Enable orchestrator mode (set to `true` to activate). Alternatively, include "orchestrator" in the `CLAUDE_CLI_NAME` value.
+
+- `BASH_DEFAULT_TIMEOUT_MS`: Set the default timeout for Claude CLI executions (default: 300000ms / 5 minutes)
+
+- `BASH_MAX_TIMEOUT_MS`: Set the maximum allowed timeout for Claude CLI executions (default: 1800000ms / 30 minutes)
+
 ## Installation & Usage
 
 The recommended way to use this server is by installing it by using `npx`.
@@ -82,6 +88,42 @@ To use a custom Claude CLI binary name, you can specify the environment variable
       }
     },
 ```
+
+### Orchestrator Configuration
+
+To use claude-code-mcp in orchestrator mode, configure it with the orchestrator environment:
+
+```json
+    "claude-code-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@steipete/claude-code-mcp@latest"
+      ],
+      "env": {
+        "MCP_ORCHESTRATOR_MODE": "true",
+        "BASH_DEFAULT_TIMEOUT_MS": "300000",
+        "BASH_MAX_TIMEOUT_MS": "1800000"
+      }
+    },
+```
+
+Orchestrator mode enables:
+- Extended timeout support for complex operations
+- Task delegation capabilities 
+- Recursion prevention
+- Enhanced orchestration prompting
+
+Alternatively, you can create a dedicated Claude Code environment for orchestration and use it in your `.claude.json`:
+
+```bash
+# Create a dedicated Claude orchestrator environment
+claude --name claude-orchestrator
+
+# Configure .claude.json to use this environment and add claude-code-mcp to it
+```
+
+This setup creates a meta-agent architecture where the orchestrator can delegate tasks to standard Claude Code instances while maintaining separation of concerns.
 
 ## Important First-Time Setup: Accepting Permissions
 
@@ -136,6 +178,8 @@ Executes a prompt directly using the Claude Code CLI with `--dangerously-skip-pe
 
 **Arguments:**
 - `prompt` (string, required): The prompt to send to Claude Code.
+- `workFolder` (string, optional): The working directory for Claude Code's execution. Must be an absolute path.
+- `timeout` (number, optional): Custom timeout in milliseconds for long-running operations. Maximum value depends on configuration (default max: 1800000ms / 30 minutes).
 - `options` (object, optional):
   - `tools` (array of strings, optional): Specific Claude tools to enable (e.g., `Bash`, `Read`, `Write`). Common tools are enabled by default.
 
@@ -144,7 +188,9 @@ Executes a prompt directly using the Claude Code CLI with `--dangerously-skip-pe
 {
   "toolName": "claude_code:claude_code",
   "arguments": {
-    "prompt": "Refactor the function foo in main.py to be async."
+    "prompt": "Refactor the function foo in main.py to be async.",
+    "workFolder": "/Users/username/projects/my-project",
+    "timeout": 600000
   }
 }
 ```
@@ -220,6 +266,24 @@ This example illustrates `claude_code` handling a more complex, multi-step task,
 
 **CRITICAL: Remember to provide Current Working Directory (CWD) context in your prompts for file system or git operations (e.g., `"Your work folder is /path/to/project\n\n...your command..."`).**
 
+### Orchestrated Multi-Step Workflows (Meta-Agent Pattern)
+
+When running in orchestrator mode, you can delegate complex workflows to Claude Code instances:
+
+```
+Your work folder is /path/to/project
+
+1. Create a new branch named 'feature/authentication'
+2. Implement a basic JWT authentication middleware in src/middleware/auth.js
+3. Add unit tests in test/middleware/auth.test.js
+4. Update the API router to use the new middleware for protected routes
+5. Ensure all tests pass
+6. Commit the changes with a descriptive message
+7. Create a pull request
+```
+
+The orchestrator breaks down the task into atomic operations, ensuring clean separation between coordination (meta-agent) and execution (worker agents).
+
 ## Troubleshooting
 
 - **"Command not found" (claude-code-mcp):** If installed globally, ensure the npm global bin directory is in your system's PATH. If using `npx`, ensure `npx` itself is working.
@@ -262,9 +326,12 @@ For detailed testing documentation, see our [E2E Testing Guide](./docs/e2e-testi
 
 The server's behavior can be customized using these environment variables:
 
-- `CLAUDE_CLI_PATH`: Absolute path to the Claude CLI executable.
+- `CLAUDE_CLI_NAME`: Override the Claude CLI binary name or provide an absolute path (default: `claude`).
   - Default: Checks `~/.claude/local/claude`, then falls back to `claude` (expecting it in PATH).
 - `MCP_CLAUDE_DEBUG`: Set to `true` for verbose debug logging from this MCP server. Default: `false`.
+- `MCP_ORCHESTRATOR_MODE`: Set to `true` to enable orchestrator mode. Default: `false`.
+- `BASH_DEFAULT_TIMEOUT_MS`: Default timeout for Claude CLI executions in milliseconds. Default: `300000` (5 minutes).
+- `BASH_MAX_TIMEOUT_MS`: Maximum allowed timeout for Claude CLI executions in milliseconds. Default: `1800000` (30 minutes).
 
 These can be set in your shell environment or within the `env` block of your `mcp.json` server configuration (though the `env` block in `mcp.json` examples was removed for simplicity, it's still a valid way to set them for the server process if needed).
 
