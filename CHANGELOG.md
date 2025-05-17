@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2025-05-17
+
+### Added
+- Orchestrator mode for meta-agent workflows
+- Enhanced tool description with orchestration capabilities
+- Extended input schema with orchestrationMode, timeout, and verificationSteps
+- Environment detection for CLAUDE_ORCHESTRATOR_MODE
+- Custom timeout support per operation
+- System prompt injection for orchestrator instances
+- Comprehensive orchestrator documentation and examples
+
+### Enhanced
+- Tool execution logic to support orchestration parameters
+- Server capabilities to advertise orchestration features
+
+### Security
+- Maintained environment isolation to prevent recursion loops
+- Preserved permission bypass safety with enhanced controls
+
 ## [1.10.12] - 2025-05-17
 
 - Fixed MCP server startup issue by ensuring process runs regardless of module detection

@@ -1,6 +1,6 @@
 {
   "name": "@steipete/claude-code-mcp",
-  "version": "1.10.12",
+  "version": "1.11.0",
   "description": "Simple MCP server for Claude Code one-shot execution",
   "author": "Peter Steinberger",
   "license": "MIT",
@@ -17,7 +17,9 @@
     "test:e2e": "npm run build && vitest run --config vitest.config.e2e.ts",
     "test:e2e:local": "npm run build && vitest run --config vitest.config.e2e.ts",
     "test:coverage": "npm run build && vitest --coverage --config vitest.config.unit.ts",
-    "test:watch": "vitest --watch"
+    "test:watch": "vitest --watch",
+    "test:orchestrator": "npm run build && node scripts/validate-orchestrator.js",
+    "build:orchestrator": "npm run build && node scripts/validate-orchestrator.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.2",
@@ -42,7 +44,10 @@
     "claude",
     "ai",
     "llm",
-    "tools"
+    "tools",
+    "orchestrator",
+    "meta-agent",
+    "workflow-automation"
   ],
   "bugs": {
     "url": "https://github.com/steipete/claude-code-mcp/issues"

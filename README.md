@@ -142,7 +142,7 @@ Executes a prompt directly using the Claude Code CLI with `--dangerously-skip-pe
 **Example MCP Request:**
 ```json
 {
-  "toolName": "claude_code:claude_code",
+  "toolName": "claude_code",
   "arguments": {
     "prompt": "Refactor the function foo in main.py to be async."
   }
