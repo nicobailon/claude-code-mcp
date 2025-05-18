@@ -48,12 +48,26 @@ export class MCPTestClient extends EventEmitter {
 
       const { dirname, join } = require('path');
       
-      // Get the path to the wrapper script relative to this file
-      const wrapperPath = join(dirname(__filename), 'test-server-wrapper.js');
-      console.log(`MCPTestClient: Using wrapper at ${wrapperPath}`);
+      // If the server path ends with .js, assume it's the actual server file
+      // Otherwise, use the wrapper script
+      let command;
+      let args;
       
-      // Start the server via the wrapper script
-      this.server = spawn('node', [wrapperPath, this.serverPath], {
+      if (this.serverPath.endsWith('.js')) {
+        // Direct server execution
+        command = 'node';
+        args = [this.serverPath];
+        console.log(`MCPTestClient: Running server directly at ${this.serverPath}`);
+      } else {
+        // Use wrapper script
+        const wrapperPath = join(dirname(__filename), 'test-server-wrapper.js');
+        command = 'node';
+        args = [wrapperPath, this.serverPath];
+        console.log(`MCPTestClient: Using wrapper at ${wrapperPath}`);
+      }
+      
+      // Start the server
+      this.server = spawn(command, args, {
         env: { ...process.env, ...this.env },
         stdio: ['pipe', 'pipe', 'pipe'],
       });
@@ -69,11 +83,13 @@ export class MCPTestClient extends EventEmitter {
         this.stderrOutput += output;
         console.error('Server stderr:', output); // Keep this for debugging
         
-        // Check if the server has started
-        if (output.includes('[TestWrapper] Server started and connected')) {
+        // Check if the server has started - look for both wrapper and direct server messages
+        if (output.includes('[TestWrapper] Server started and connected') || 
+            output.includes('Claude Code MCP server running on stdio')) {
           console.log('MCPTestClient: Detected server ready message');
-          // Once we see this message, try a ping
-          setTimeout(() => this.checkServerReady(readinessTimeout), 300);
+          // Once we see this message, try a ping with a longer delay for direct server execution
+          const delay = this.serverPath.endsWith('.js') ? 500 : 300;
+          setTimeout(() => this.checkServerReady(readinessTimeout), delay);
         }
       });
 

@@ -115,23 +115,25 @@ echo "$(date +"%Y-%m-%d %H:%M:%S") CMD: '$prompt' WORKDIR: '$workdir'" >> "$comm
 # Parse and respond to echo commands more reliably
 if [[ "$prompt" == echo* ]]; then
   # Extract the quoted part of the echo command using sed
-  if echo "$prompt" | grep -q "echo[[:space:]]*\""; then
+  if echo "$prompt" | grep -q "echo[[:space:]]*\\""; then
     # Get the content inside the double quotes
-    echo_content=$(echo "$prompt" | sed -E 's/^echo[[:space:]]*"([^"]*)".*$/\\1/')
+    echo_content=$(echo "$prompt" | sed -e "s/^echo[[:space:]]*\\\"//" -e "s/\\\".*$//")
     echo "Mock: Executing echo with content: '$echo_content'" >&2
-    echo "$echo_content"
+    echo -n "$echo_content"
     exit 0
   elif echo "$prompt" | grep -q "echo[[:space:]]*'"; then
-    # Handle single quotes as well
-    echo_content=$(echo "$prompt" | sed -E 's/^echo[[:space:]]*'\''([^'\'']*)'\'\'.*$/\\1/')
+    # Handle single quotes with a very basic approach
+    # Extract everything after echo and the first quote
+    echo_content=$(echo "$prompt" | sed -e "s/^echo[[:space:]]*'//" -e "s/'.*$//")
     echo "Mock: Executing echo with content: '$echo_content'" >&2
-    echo "$echo_content"
+    echo -n "$echo_content"
     exit 0
   elif echo "$prompt" | grep -q "echo[[:space:]]*[^[:space:]]+"; then
     # Handle unquoted echo
-    echo_content=$(echo "$prompt" | sed -E 's/^echo[[:space:]]*([^[:space:]]+).*$/\\1/')
+    # Simple extraction of the first word after echo
+    echo_content=$(echo "$prompt" | sed -e "s/^echo[[:space:]]*//" -e "s/[[:space:]].*$//")
     echo "Mock: Executing echo with content: '$echo_content'" >&2
-    echo "$echo_content"
+    echo -n "$echo_content"
     exit 0
   fi
 fi
@@ -145,7 +147,7 @@ if [ -f "$responseFilePath" ]; then
       # even when a custom response is set
       if [[ "$prompt" =~ ^create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+) ]] || [[ "$prompt" =~ ^Create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+) ]]; then
         # Extract filename from prompt
-        filename=$(echo "$prompt" | sed -E 's/^[cC]reate[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+).*/\\1/')
+        filename=$(echo "$prompt" | sed -e "s/^[cC]reate[[:space:]]file[[:space:]]//" -e "s/[[:space:]].*$//")
         echo "Debug: Custom response matched but still creating file '$filename' for test" >&2
         
         # Create the file if workdir is valid
@@ -166,7 +168,7 @@ if [ -f "$responseFilePath" ]; then
       fi
       
       # Return the custom response
-      echo "$matched_response"
+      echo -n "$matched_response"
       exit 0
     fi
   fi
@@ -175,11 +177,11 @@ fi
 # Mock responses based on specific patterns only
 if [[ -z "$prompt" ]]; then
   # Handle empty prompt case
-  echo "Empty prompt handled successfully"
+  echo -n "Empty prompt handled successfully"
   exit 0
 elif [[ "$prompt" =~ ^create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+)[[:space:]]with[[:space:]]content ]]; then
   # Extract the filename
-  filename=$(echo "$prompt" | sed -E 's/^create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+)[[:space:]]with[[:space:]]content.*/\\1/')
+  filename=$(echo "$prompt" | sed -e "s/^create[[:space:]]file[[:space:]]//" -e "s/[[:space:]]with[[:space:]]content.*$//")
   # Create a real file for side-effect verification
   # First ensure workdir is properly handled
   if [ -n "$workdir" ]; then
@@ -209,11 +211,11 @@ elif [[ "$prompt" =~ ^create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+)[[:space:
     echo "Content" > "$filename"
     echo "Mock debug: File created in current directory: $(pwd)/$filename" >&2
   fi
-  echo "Created file $filename successfully"
+  echo -n "Created file $filename successfully"
   exit 0
 elif [[ "$prompt" =~ ^Create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+)$ ]]; then
   # Extract the filename (for tests with just "Create file test.txt")
-  filename=$(echo "$prompt" | sed -E 's/^Create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+)$/\\1/')
+  filename=$(echo "$prompt" | sed -e "s/^Create[[:space:]]file[[:space:]]//" -e "s/$//")
   # Create a real file for side-effect verification
   # First ensure workdir is properly handled
   if [ -n "$workdir" ]; then
@@ -243,10 +245,10 @@ elif [[ "$prompt" =~ ^Create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+)$ ]]; the
     echo "Content" > "$filename"
     echo "Mock debug: File created in current directory: $(pwd)/$filename" >&2
   fi
-  echo "Created file $filename successfully"
+  echo -n "Created file $filename successfully"
   exit 0
 elif [[ "$prompt" == *"git"* ]] && [[ "$prompt" == *"commit"* ]]; then
-  echo "Committed changes successfully"
+  echo -n "Committed changes successfully"
   exit 0
 elif [[ "$prompt" == "Create file test1.txt" ]]; then
   # Special case for the concurrent test
@@ -276,7 +278,7 @@ elif [[ "$prompt" == "Create file test1.txt" ]]; then
     echo "Content" > "test1.txt"
     echo "Mock debug: File created in current directory: $(pwd)/test1.txt" >&2
   fi
-  echo "Created file test1.txt successfully"
+  echo -n "Created file test1.txt successfully"
   exit 0
 elif [[ "$prompt" == "Create file test2.txt" ]]; then
   # Special case for the concurrent test
@@ -306,22 +308,25 @@ elif [[ "$prompt" == "Create file test2.txt" ]]; then
     echo "Content" > "test2.txt"
     echo "Mock debug: File created in current directory: $(pwd)/test2.txt" >&2
   fi
-  echo "Created file test2.txt successfully"
+  echo -n "Created file test2.txt successfully"
   exit 0
 elif [[ "$prompt" == *"check_env"* ]]; then
   echo "Environment Variables in Mock:"
   echo "MCP_ORCHESTRATOR_MODE_IN_MOCK=$MCP_ORCHESTRATOR_MODE"
   echo "CLAUDE_CLI_NAME_IN_MOCK=$CLAUDE_CLI_NAME"
-  echo "MCP_CLAUDE_DEBUG_IN_MOCK=$MCP_CLAUDE_DEBUG"
+  echo -n "MCP_CLAUDE_DEBUG_IN_MOCK=$MCP_CLAUDE_DEBUG"
   exit 0
 elif [[ "$prompt" == *"error"* ]]; then
   echo "Error: Mock error response" >&2
+  exit 1
+elif [[ "$prompt" == "do something our mock doesn't explicitly handle" ]]; then
+  echo "Error: Unrecognized command" >&2
   exit 1
 else
   # For any other unrecognized command, echo back a simple success message
   # This makes the mock more lenient and prevents test failures due to
   # simple command not being explicitly handled
-  echo "Mock executed: $prompt"
+  echo -n "Mock executed: $prompt"
   exit 0
 fi`;
 
@@ -404,9 +409,15 @@ fi`;
     if (existsSync(this.commandLogPath)) {
       const { readFile } = await import('node:fs/promises');
       const content = await readFile(this.commandLogPath, 'utf-8');
-      return content.split('\n')
-        .filter(line => line.trim().length > 0)
-        .map(line => line.replace(/^.*CMD: '(.*?)' WORKDIR.*$/, '$1'));
+      // Match timestamp, then extract the CMD part considering multiline content
+      const matches = content.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} CMD: '([\s\S]*?)' WORKDIR:/g);
+      
+      if (matches) {
+        return matches.map(match => {
+          const commandMatch = match.match(/CMD: '([\s\S]*?)' WORKDIR:/);
+          return commandMatch ? commandMatch[1] : '';
+        });
+      }
     }
     return [];
   }

@@ -289,8 +289,8 @@ describe('Claude Code MCP E2E Tests', () => {
       }]);
 
       // Verify debug logs were captured in stderr with specific patterns
-      expect(isolatedClient.stderrOutput).toMatch(/\[Debug CallToolRequest\] Received:.+prompt.+Debug test prompt/s);
-      expect(isolatedClient.stderrOutput).toMatch(/\[Debug CallToolRequest\] Using workFolder as CWD:.+/);
+      expect(isolatedClient.stderrOutput).toMatch(/\[Debug\] Handling CallToolRequest:.+prompt.+Debug test prompt/s);
+      expect(isolatedClient.stderrOutput).toMatch(/\[Debug\] Using workFolder as CWD:.+/);
       
       // Verify the command was logged in the mock's command log
       const commands = await mock.getExecutedCommands();

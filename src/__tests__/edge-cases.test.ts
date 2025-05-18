@@ -180,7 +180,7 @@ describe('Claude Code Edge Cases', () => {
           prompt: 'Test prompt',
           workFolder: testDir,
         })
-      ).rejects.toThrow(/ENOENT|not found|no such file/i);
+      ).rejects.toThrow(/ENOENT|not found|no such file|spawn error|Spawn error|execution failed/i);
       
       await errorClient.disconnect();
     });

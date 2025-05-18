@@ -22,8 +22,8 @@ const SERVER_VERSION = "1.11.0";
 const debugMode = process.env.MCP_CLAUDE_DEBUG === 'true';
 
 // Detect orchestrator mode
-const isOrchestratorMode = process.env.CLAUDE_CLI_NAME?.includes('orchestrator') || 
-                           process.env.MCP_ORCHESTRATOR_MODE === 'true';
+export const isOrchestratorMode = process.env.CLAUDE_CLI_NAME?.includes('orchestrator') || 
+                                  process.env.MCP_ORCHESTRATOR_MODE === 'true';
 
 // Track if this is the first tool use for version printing
 let isFirstToolUse = true;
@@ -200,7 +200,7 @@ export class ClaudeCodeServer {
   /**
    * Gets orchestrator-specific system prompt if in orchestrator mode
    */
-  private getOrchestratorSystemPrompt(): string {
+  public getOrchestratorSystemPrompt(): string {
     if (!isOrchestratorMode) return '';
     
     return `
@@ -397,5 +397,14 @@ Focus on task decomposition and coordination rather than direct execution.
 }
 
 // Create and run the server if this is the main module
-const server = new ClaudeCodeServer();
-server.run().catch(console.error);
+// Use import.meta.url for ES modules
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule && !process.env.VITEST) {
+  const server = new ClaudeCodeServer();
+  
+  // Keep the process alive
+  server.run().then(() => {
+    // Keep the process running for stdio transport
+    process.stdin.resume();
+  }).catch(console.error);
+}

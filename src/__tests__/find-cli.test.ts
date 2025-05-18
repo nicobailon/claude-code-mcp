@@ -29,6 +29,7 @@ describe('findClaudeCli Function', () => {
     // Set up default path mock behavior
     mockPath.isAbsolute = vi.fn().mockImplementation((p: string) => p.startsWith('/'));
     mockPath.join = vi.fn().mockImplementation((...segments: string[]) => segments.join('/'));
+    mockPath.resolve = vi.fn().mockImplementation((p: string) => p);
   });
 
   afterEach(() => {
