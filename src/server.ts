@@ -21,9 +21,8 @@ const SERVER_VERSION = "1.11.0";
 // Define debugMode globally using const
 const debugMode = process.env.MCP_CLAUDE_DEBUG === 'true';
 
-// Detect orchestrator mode
-const isOrchestratorMode = process.env.CLAUDE_CLI_NAME?.includes('orchestrator') || 
-                           process.env.MCP_ORCHESTRATOR_MODE === 'true';
+// This will be moved to a class method, declaring it here to avoid TypeScript errors
+let isOrchestratorModeValue = false;
 
 // Track if this is the first tool use for version printing
 let isFirstToolUse = true;
@@ -168,6 +167,9 @@ export class ClaudeCodeServer {
     console.error(`[Setup] Using Claude CLI command/path: ${this.claudeCliPath}`);
     this.packageVersion = SERVER_VERSION;
 
+    // Set orchestrator mode value at construction time
+    isOrchestratorModeValue = this.isOrchestratorMode();
+
     this.server = new Server(
       {
         name: 'claude_code',
@@ -193,6 +195,31 @@ export class ClaudeCodeServer {
       });
     }
   }
+  
+  /**
+   * Determines if the server is running in orchestrator mode
+   */
+  isOrchestratorMode(): boolean {
+    return process.env.CLAUDE_CLI_NAME?.includes('orchestrator') || 
+           process.env.MCP_ORCHESTRATOR_MODE === 'true';
+  }
+  
+  /**
+   * Prepares the environment variables for child processes
+   * Removes orchestrator-specific variables to prevent recursion
+   */
+  prepareEnvironmentForChild(): NodeJS.ProcessEnv {
+    const spawnEnv = { ...process.env };
+    
+    // Prevent recursion by removing orchestrator-specific variables
+    if (this.isOrchestratorMode()) {
+      delete spawnEnv.CLAUDE_CLI_NAME;           // Use default claude CLI
+      delete spawnEnv.MCP_ORCHESTRATOR_MODE;     // Remove orchestrator mode
+      spawnEnv.MCP_CLAUDE_DEBUG = 'false';       // Reduce noise from spawned instances
+    }
+    
+    return spawnEnv;
+  }
 
   /**
    * Set up the MCP tool handlers
@@ -200,8 +227,8 @@ export class ClaudeCodeServer {
   /**
    * Gets orchestrator-specific system prompt if in orchestrator mode
    */
-  private getOrchestratorSystemPrompt(): string {
-    if (!isOrchestratorMode) return '';
+  getOrchestratorSystemPrompt(): string {
+    if (!this.isOrchestratorMode()) return '';
     
     return `
 
@@ -217,13 +244,12 @@ Focus on task decomposition and coordination rather than direct execution.
 `;
   }
 
-  private setupToolHandlers(): void {
+  setupToolHandlers(): any[] {
     // Define available tools
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: [
-        {
-          name: 'claude_code',
-          description: `Claude Code Agent: Your versatile multi-modal assistant for code, file, Git, and terminal operations via Claude CLI. Use \`workFolder\` for contextual execution.${this.getOrchestratorSystemPrompt()}
+    const tools = [
+      {
+        name: 'claude_code',
+        description: `Claude Code Agent: Your versatile multi-modal assistant for code, file, Git, and terminal operations via Claude CLI. Use \`workFolder\` for contextual execution.${this.getOrchestratorSystemPrompt()}
 
 • File ops: Create, read, (fuzzy) edit, move, copy, delete, list files, analyze/ocr images, file content analysis
     └─ e.g., "Create /tmp/log.txt with 'system boot'", "Edit main.py to replace 'debug_mode = True' with 'debug_mode = False'", "List files in /src", "Move a specific section somewhere else"
@@ -257,25 +283,29 @@ Focus on task decomposition and coordination rather than direct execution.
 8. Claude can do much more, just ask it!
 
         `,
-          inputSchema: {
-            type: 'object',
-            properties: {
-              prompt: {
-                type: 'string',
-                description: 'The detailed natural language prompt for Claude to execute.',
-              },
-              workFolder: {
-                type: 'string',
-                description: 'Mandatory when using file operations or referencing any file. The working directory for the Claude CLI execution. Must be an absolute path.',
-              },
+        inputSchema: {
+          type: 'object',
+          properties: {
+            prompt: {
+              type: 'string',
+              description: 'The detailed natural language prompt for Claude to execute.',
             },
-            required: ['prompt'],
+            workFolder: {
+              type: 'string',
+              description: 'Mandatory when using file operations or referencing any file. The working directory for the Claude CLI execution. Must be an absolute path.',
+            },
           },
-        }
-      ],
+          required: ['prompt'],
+        },
+      }
+    ];
+    
+    // Register tools with the server
+    this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
+      tools: tools,
     }));
-
-    // Handle tool calls
+    
+    // Register tool handlers
     const executionTimeoutMs = 1800000; // 30 minutes timeout
 
     this.server.setRequestHandler(CallToolRequestSchema, async (args, call): Promise<ServerResult> => {
@@ -328,7 +358,7 @@ Focus on task decomposition and coordination rather than direct execution.
         // Print tool info on first use
         if (isFirstToolUse) {
           const versionInfo = `claude_code v${SERVER_VERSION} started at ${serverStartupTime}`;
-          const modeInfo = isOrchestratorMode ? ' [ORCHESTRATOR MODE]' : '';
+          const modeInfo = this.isOrchestratorMode() ? ' [ORCHESTRATOR MODE]' : '';
           console.error(versionInfo + modeInfo);
           isFirstToolUse = false;
         }
@@ -337,14 +367,7 @@ Focus on task decomposition and coordination rather than direct execution.
         debugLog(`[Debug] Invoking Claude CLI: ${this.claudeCliPath} ${claudeProcessArgs.join(' ')}`);
 
         // Create a clean environment to prevent recursion
-        const spawnEnv = { ...process.env };
-        
-        // Prevent recursion by removing orchestrator-specific variables
-        if (isOrchestratorMode) {
-          delete spawnEnv.CLAUDE_CLI_NAME;           // Use default claude CLI
-          delete spawnEnv.MCP_ORCHESTRATOR_MODE;     // Remove orchestrator mode
-          spawnEnv.MCP_CLAUDE_DEBUG = 'false';       // Reduce noise from spawned instances
-        }
+        const spawnEnv = this.prepareEnvironmentForChild();
 
         const { stdout, stderr } = await spawnAsync(
           this.claudeCliPath, // Run the Claude CLI directly
@@ -383,6 +406,8 @@ Focus on task decomposition and coordination rather than direct execution.
         throw new McpError(ErrorCode.InternalError, `Claude CLI execution failed: ${errorMessage}`);
       }
     });
+    
+    return tools;
   }
 
   /**
