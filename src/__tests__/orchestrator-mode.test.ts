@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, afterEach } from 'vitest';
-import { server, ClaudeCodeServer } from '../server.js';
+import { ClaudeCodeServer } from '../server.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -36,7 +36,8 @@ describe('Orchestrator Mode', () => {
       const testServer = new ClaudeCodeServer();
       
       // Verify it's detected as orchestrator mode
-      expect(testServer['isOrchestratorMode']()).toBe(true);
+      const isOrchestratorMode = (testServer as any).isOrchestratorMode;
+      expect(isOrchestratorMode.call(testServer)).toBe(true);
     });
 
     it('should detect orchestrator mode via MCP_ORCHESTRATOR_MODE', () => {
@@ -48,7 +49,8 @@ describe('Orchestrator Mode', () => {
       const testServer = new ClaudeCodeServer();
       
       // Verify it's detected as orchestrator mode
-      expect(testServer['isOrchestratorMode']()).toBe(true);
+      const isOrchestratorMode = (testServer as any).isOrchestratorMode;
+      expect(isOrchestratorMode.call(testServer)).toBe(true);
     });
 
     it('should not be in orchestrator mode by default', () => {
@@ -60,7 +62,8 @@ describe('Orchestrator Mode', () => {
       const testServer = new ClaudeCodeServer();
       
       // Verify it's not detected as orchestrator mode
-      expect(testServer['isOrchestratorMode']()).toBe(false);
+      const isOrchestratorMode = (testServer as any).isOrchestratorMode;
+      expect(isOrchestratorMode.call(testServer)).toBe(false);
     });
   });
 
@@ -73,7 +76,8 @@ describe('Orchestrator Mode', () => {
       const testServer = new ClaudeCodeServer();
       
       // Get the system prompt
-      const systemPrompt = testServer['getOrchestratorSystemPrompt']();
+      const getOrchestratorSystemPrompt = (testServer as any).getOrchestratorSystemPrompt;
+      const systemPrompt = getOrchestratorSystemPrompt.call(testServer);
       
       // Verify it includes orchestrator-specific content
       expect(systemPrompt).toContain('[ORCHESTRATOR MODE ACTIVE]');
@@ -89,7 +93,8 @@ describe('Orchestrator Mode', () => {
       const testServer = new ClaudeCodeServer();
       
       // Get the system prompt
-      const systemPrompt = testServer['getOrchestratorSystemPrompt']();
+      const getOrchestratorSystemPrompt = (testServer as any).getOrchestratorSystemPrompt;
+      const systemPrompt = getOrchestratorSystemPrompt.call(testServer);
       
       // Verify it returns empty string (not in orchestrator mode)
       expect(systemPrompt).toBe('');
@@ -109,7 +114,8 @@ describe('Orchestrator Mode', () => {
       
       // Call the method that would spawn child processes
       // We'll check if it's preparing environment variables correctly
-      const childEnv = testServer['prepareEnvironmentForChild']();
+      const prepareEnvironmentForChild = (testServer as any).prepareEnvironmentForChild;
+      const childEnv = prepareEnvironmentForChild.call(testServer);
       
       // Verify environment modifications for child processes
       expect(childEnv.MCP_ORCHESTRATOR_MODE).toBe(undefined); // Should be removed
@@ -129,7 +135,8 @@ describe('Orchestrator Mode', () => {
       
       // Call the method that would spawn child processes
       // We'll check if it's preparing environment variables correctly
-      const childEnv = testServer['prepareEnvironmentForChild']();
+      const prepareEnvironmentForChild = (testServer as any).prepareEnvironmentForChild;
+      const childEnv = prepareEnvironmentForChild.call(testServer);
       
       // Verify environment modifications for child processes
       expect(childEnv.CLAUDE_CLI_NAME).toBe(undefined); // Should be removed
@@ -148,7 +155,8 @@ describe('Orchestrator Mode', () => {
       const testServer = new ClaudeCodeServer();
       
       // Get child environment
-      const childEnv = testServer['prepareEnvironmentForChild']();
+      const prepareEnvironmentForChild = (testServer as any).prepareEnvironmentForChild;
+      const childEnv = prepareEnvironmentForChild.call(testServer);
       
       // Verify environment is not modified
       expect(childEnv.TEST_VAR).toBe('test_value');
@@ -169,8 +177,9 @@ describe('Orchestrator Mode', () => {
       const testServer = new ClaudeCodeServer();
       
       // Get the tool handlers
-      const handlers = testServer['setupToolHandlers']();
-      const claudeCodeTool = handlers.find((h: any) => h.name === 'claude_code');
+      const setupToolHandlers = (testServer as any).setupToolHandlers;
+      const handlers = setupToolHandlers.call(testServer);
+      const claudeCodeTool = handlers?.find((h: any) => h.name === 'claude_code');
       
       // Verify tool description includes orchestrator information
       expect(claudeCodeTool?.description).toContain('ORCHESTRATOR MODE ACTIVE');
@@ -185,8 +194,9 @@ describe('Orchestrator Mode', () => {
       const testServer = new ClaudeCodeServer();
       
       // Get the tool handlers
-      const handlers = testServer['setupToolHandlers']();
-      const claudeCodeTool = handlers.find((h: any) => h.name === 'claude_code');
+      const setupToolHandlers = (testServer as any).setupToolHandlers;
+      const handlers = setupToolHandlers.call(testServer);
+      const claudeCodeTool = handlers?.find((h: any) => h.name === 'claude_code');
       
       // Verify tool description doesn't include orchestrator information
       expect(claudeCodeTool?.description).not.toContain('orchestrator');
@@ -199,7 +209,7 @@ describe('Orchestrator Mode', () => {
       const testServer = new ClaudeCodeServer();
       
       // Verify the method exists
-      expect(typeof testServer['prepareEnvironmentForChild']).toBe('function');
+      expect(typeof (testServer as any).prepareEnvironmentForChild).toBe('function');
     });
   });
 });

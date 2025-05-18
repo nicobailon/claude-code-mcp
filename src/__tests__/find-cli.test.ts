@@ -37,8 +37,8 @@ describe('findClaudeCli Function', () => {
   });
 
   it('should handle undefined homedir() gracefully', () => {
-    // Mock homedir() returning undefined
-    mockHomedir.mockReturnValue(undefined);
+    // Mock homedir() returning undefined (using null with type assertion to satisfy TypeScript)
+    mockHomedir.mockReturnValue(null as unknown as string);
     
     // This should not throw an error
     const cliPath = findClaudeCli();

@@ -362,8 +362,9 @@ describe('Error Handling Tests', () => {
       // This test manually recreates the findClaudeCli logic, instead of
       // importing from server.js which would execute the entire module
       
-      // Set up mocks and spies
-      mockHomedir.mockReturnValue(undefined);
+      // Set up mocks and spies - use null for mockHomedir to match TypeScript expectations
+      // TypeScript expects homedir() to return string, but we're testing handling of undefined
+      mockHomedir.mockReturnValue(null as unknown as string);
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       
       try {

@@ -147,9 +147,9 @@ describe('ClaudeCodeServer Unit Tests', () => {
     it('should return local path when it exists', async () => {
       // Configure mocks
       mockHomedir.mockReturnValue('/home/user');
-      mockExistsSync.mockImplementation((path) => {
+      mockExistsSync.mockImplementation((pathParam: string) => {
         // Mock returns true for real CLI path
-        return path === '/home/user/.claude/local/claude';
+        return pathParam === '/home/user/.claude/local/claude';
       });
       
       // Import just the findClaudeCli function
@@ -584,10 +584,10 @@ describe('ClaudeCodeServer Unit Tests', () => {
 
     it('should handle non-existent workFolder', async () => {
       // Configure existsSync to return false for non-existent directory
-      mockExistsSync.mockImplementation((path) => {
+      mockExistsSync.mockImplementation((pathParam: string) => {
         // Make the CLI path exist but the workFolder not exist
-        if (String(path).includes('.claude')) return true;
-        if (path === '/nonexistent') return false;
+        if (String(pathParam).includes('.claude')) return true;
+        if (pathParam === '/nonexistent') return false;
         return false;
       });
       
