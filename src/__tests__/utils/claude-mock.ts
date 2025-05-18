@@ -16,7 +16,7 @@ import { join, dirname } from 'node:path';
  * to create isolated instances for each test.
  */
 export class ClaudeMock {
-  private mockPath: string;
+  public mockPath: string;
   private responses = new Map<string, string>();
   private mockDir: string;
   private commandLogPath: string;
@@ -117,19 +117,19 @@ if [[ "$prompt" == echo* ]]; then
   # Extract the quoted part of the echo command using sed
   if echo "$prompt" | grep -q "echo[[:space:]]*\""; then
     # Get the content inside the double quotes
-    echo_content=$(echo "$prompt" | sed -E 's/^echo[[:space:]]*"([^"]*)".*$/\1/')
+    echo_content=$(echo "$prompt" | sed -E 's/^echo[[:space:]]*"([^"]*)".*$/\\1/')
     echo "Mock: Executing echo with content: '$echo_content'" >&2
     echo "$echo_content"
     exit 0
   elif echo "$prompt" | grep -q "echo[[:space:]]*'"; then
     # Handle single quotes as well
-    echo_content=$(echo "$prompt" | sed -E "s/^echo[[:space:]]*'([^']*)'.*$/\1/")
+    echo_content=$(echo "$prompt" | sed -E 's/^echo[[:space:]]*'"'"'([^'"'"']*)'"'"'.*$/\\1/')
     echo "Mock: Executing echo with content: '$echo_content'" >&2
     echo "$echo_content"
     exit 0
   elif echo "$prompt" | grep -q "echo[[:space:]]*[^[:space:]]+"; then
     # Handle unquoted echo
-    echo_content=$(echo "$prompt" | sed -E 's/^echo[[:space:]]*([^[:space:]]+).*$/\1/')
+    echo_content=$(echo "$prompt" | sed -E 's/^echo[[:space:]]*([^[:space:]]+).*$/\\1/')
     echo "Mock: Executing echo with content: '$echo_content'" >&2
     echo "$echo_content"
     exit 0
@@ -145,7 +145,7 @@ if [ -f "$responseFilePath" ]; then
       # even when a custom response is set
       if [[ "$prompt" =~ ^create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+) ]] || [[ "$prompt" =~ ^Create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+) ]]; then
         # Extract filename from prompt
-        filename=$(echo "$prompt" | sed -E 's/^[cC]reate[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+).*/\1/')
+        filename=$(echo "$prompt" | sed -E 's/^[cC]reate[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+).*/\\1/')
         echo "Debug: Custom response matched but still creating file '$filename' for test" >&2
         
         # Create the file if workdir is valid
@@ -179,7 +179,7 @@ if [[ -z "$prompt" ]]; then
   exit 0
 elif [[ "$prompt" =~ ^create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+)[[:space:]]with[[:space:]]content ]]; then
   # Extract the filename
-  filename=$(echo "$prompt" | sed -E 's/^create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+)[[:space:]]with[[:space:]]content.*/\1/')
+  filename=$(echo "$prompt" | sed -E 's/^create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+)[[:space:]]with[[:space:]]content.*/\\1/')
   # Create a real file for side-effect verification
   # First ensure workdir is properly handled
   if [ -n "$workdir" ]; then
@@ -213,7 +213,7 @@ elif [[ "$prompt" =~ ^create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+)[[:space:
   exit 0
 elif [[ "$prompt" =~ ^Create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+)$ ]]; then
   # Extract the filename (for tests with just "Create file test.txt")
-  filename=$(echo "$prompt" | sed -E 's/^Create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+)$/\1/')
+  filename=$(echo "$prompt" | sed -E 's/^Create[[:space:]]file[[:space:]]([a-zA-Z0-9_.-]+)$/\\1/')
   # Create a real file for side-effect verification
   # First ensure workdir is properly handled
   if [ -n "$workdir" ]; then
