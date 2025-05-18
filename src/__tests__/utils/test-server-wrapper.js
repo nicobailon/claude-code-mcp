@@ -38,12 +38,20 @@ async function main() {
         const serverModule = await import(absoluteServerPath);
         console.error(`[TestWrapper] Server module imported, keys: ${Object.keys(serverModule)}`);
         
-        if (!serverModule.server) {
-          console.error('[TestWrapper] ERROR: server not found in module');
+        // Find either 'server' or 'ClaudeCodeServer' in the module
+        let server;
+        if (serverModule.server) {
+          server = serverModule.server;
+          console.error('[TestWrapper] Found server instance in module');
+        } else if (serverModule.ClaudeCodeServer) {
+          // Create a new instance if we have the class
+          console.error('[TestWrapper] Found ClaudeCodeServer class, creating instance');
+          server = new serverModule.ClaudeCodeServer();
+        } else {
+          console.error('[TestWrapper] ERROR: neither server nor ClaudeCodeServer found in module');
+          console.error('[TestWrapper] Available exports:', Object.keys(serverModule));
           process.exit(1);
         }
-        
-        const { server } = serverModule;
         console.error(`[TestWrapper] Server object type: ${typeof server}`);
         console.error(`[TestWrapper] Server properties: ${Object.keys(server)}`);
         

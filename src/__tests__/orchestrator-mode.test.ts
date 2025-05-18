@@ -4,6 +4,16 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+// This is a type declaration for the test file only
+// It allows us to access private methods in tests without TypeScript errors
+// @ts-ignore
+interface TestableClaudeCodeServer extends ClaudeCodeServer {
+  isOrchestratorMode: () => boolean;
+  getOrchestratorSystemPrompt: () => string;
+  prepareEnvironmentForChild: () => NodeJS.ProcessEnv;
+  setupToolHandlers: () => any[];
+}
+
 describe('Orchestrator Mode', () => {
   let originalEnv: NodeJS.ProcessEnv;
   let testDir: string;
@@ -33,7 +43,8 @@ describe('Orchestrator Mode', () => {
       delete process.env.MCP_ORCHESTRATOR_MODE;
       
       // Create a new server instance to test with the modified environment
-      const testServer = new ClaudeCodeServer();
+      // Cast to our testable interface to access private methods
+      const testServer = new ClaudeCodeServer() as unknown as TestableClaudeCodeServer;
       
       // Verify it's detected as orchestrator mode
       const isOrchestratorMode = (testServer as any).isOrchestratorMode;
@@ -46,7 +57,8 @@ describe('Orchestrator Mode', () => {
       process.env.CLAUDE_CLI_NAME = 'claude'; // Normal CLI name
       
       // Create a new server instance to test with the modified environment
-      const testServer = new ClaudeCodeServer();
+      // Cast to our testable interface to access private methods
+      const testServer = new ClaudeCodeServer() as unknown as TestableClaudeCodeServer;
       
       // Verify it's detected as orchestrator mode
       const isOrchestratorMode = (testServer as any).isOrchestratorMode;
@@ -59,7 +71,8 @@ describe('Orchestrator Mode', () => {
       process.env.CLAUDE_CLI_NAME = 'claude';
       
       // Create a new server instance to test with the modified environment
-      const testServer = new ClaudeCodeServer();
+      // Cast to our testable interface to access private methods
+      const testServer = new ClaudeCodeServer() as unknown as TestableClaudeCodeServer;
       
       // Verify it's not detected as orchestrator mode
       const isOrchestratorMode = (testServer as any).isOrchestratorMode;
@@ -73,10 +86,11 @@ describe('Orchestrator Mode', () => {
       process.env.MCP_ORCHESTRATOR_MODE = 'true';
       
       // Create a new server instance
-      const testServer = new ClaudeCodeServer();
+      // Cast to our testable interface to access private methods
+      const testServer = new ClaudeCodeServer() as unknown as TestableClaudeCodeServer;
       
       // Get the system prompt
-      const getOrchestratorSystemPrompt = (testServer as any).getOrchestratorSystemPrompt;
+      const getOrchestratorSystemPrompt = testServer.getOrchestratorSystemPrompt;
       const systemPrompt = getOrchestratorSystemPrompt.call(testServer);
       
       // Verify it includes orchestrator-specific content
@@ -90,10 +104,11 @@ describe('Orchestrator Mode', () => {
       process.env.CLAUDE_CLI_NAME = 'claude';
       
       // Create a new server instance
-      const testServer = new ClaudeCodeServer();
+      // Cast to our testable interface to access private methods
+      const testServer = new ClaudeCodeServer() as unknown as TestableClaudeCodeServer;
       
       // Get the system prompt
-      const getOrchestratorSystemPrompt = (testServer as any).getOrchestratorSystemPrompt;
+      const getOrchestratorSystemPrompt = testServer.getOrchestratorSystemPrompt;
       const systemPrompt = getOrchestratorSystemPrompt.call(testServer);
       
       // Verify it returns empty string (not in orchestrator mode)
@@ -110,7 +125,8 @@ describe('Orchestrator Mode', () => {
       process.env.MCP_CLAUDE_DEBUG = 'true';
       
       // Create a new server instance
-      const testServer = new ClaudeCodeServer();
+      // Cast to our testable interface to access private methods
+      const testServer = new ClaudeCodeServer() as unknown as TestableClaudeCodeServer;
       
       // Call the method that would spawn child processes
       // We'll check if it's preparing environment variables correctly
@@ -131,7 +147,8 @@ describe('Orchestrator Mode', () => {
       process.env.MCP_CLAUDE_DEBUG = 'true';
       
       // Create a new server instance
-      const testServer = new ClaudeCodeServer();
+      // Cast to our testable interface to access private methods
+      const testServer = new ClaudeCodeServer() as unknown as TestableClaudeCodeServer;
       
       // Call the method that would spawn child processes
       // We'll check if it's preparing environment variables correctly
@@ -152,7 +169,8 @@ describe('Orchestrator Mode', () => {
       process.env.MCP_CLAUDE_DEBUG = 'true';
       
       // Create a new server instance
-      const testServer = new ClaudeCodeServer();
+      // Cast to our testable interface to access private methods
+      const testServer = new ClaudeCodeServer() as unknown as TestableClaudeCodeServer;
       
       // Get child environment
       const prepareEnvironmentForChild = (testServer as any).prepareEnvironmentForChild;
@@ -174,12 +192,14 @@ describe('Orchestrator Mode', () => {
       process.env.MCP_ORCHESTRATOR_MODE = 'true';
       
       // Create a new server instance
-      const testServer = new ClaudeCodeServer();
+      // Cast to our testable interface to access private methods
+      const testServer = new ClaudeCodeServer() as unknown as TestableClaudeCodeServer;
       
       // Get the tool handlers
-      const setupToolHandlers = (testServer as any).setupToolHandlers;
+      const setupToolHandlers = testServer.setupToolHandlers;
       const handlers = setupToolHandlers.call(testServer);
-      const claudeCodeTool = handlers?.find((h: any) => h.name === 'claude_code');
+      // Find the claude_code tool handler
+      const claudeCodeTool = handlers?.find((h: { name: string, description: string }) => h.name === 'claude_code');
       
       // Verify tool description includes orchestrator information
       expect(claudeCodeTool?.description).toContain('ORCHESTRATOR MODE ACTIVE');
@@ -191,12 +211,14 @@ describe('Orchestrator Mode', () => {
       process.env.CLAUDE_CLI_NAME = 'claude';
       
       // Create a new server instance
-      const testServer = new ClaudeCodeServer();
+      // Cast to our testable interface to access private methods
+      const testServer = new ClaudeCodeServer() as unknown as TestableClaudeCodeServer;
       
       // Get the tool handlers
-      const setupToolHandlers = (testServer as any).setupToolHandlers;
+      const setupToolHandlers = testServer.setupToolHandlers;
       const handlers = setupToolHandlers.call(testServer);
-      const claudeCodeTool = handlers?.find((h: any) => h.name === 'claude_code');
+      // Find the claude_code tool handler
+      const claudeCodeTool = handlers?.find((h: { name: string, description: string }) => h.name === 'claude_code');
       
       // Verify tool description doesn't include orchestrator information
       expect(claudeCodeTool?.description).not.toContain('orchestrator');
@@ -206,10 +228,11 @@ describe('Orchestrator Mode', () => {
   describe('Helper method: prepareEnvironmentForChild', () => {
     it('should create a method to prepare environment for child processes', () => {
       // This method should exist on the server instance to support orchestrator mode
-      const testServer = new ClaudeCodeServer();
+      // Cast to our testable interface to access private methods
+      const testServer = new ClaudeCodeServer() as unknown as TestableClaudeCodeServer;
       
       // Verify the method exists
-      expect(typeof (testServer as any).prepareEnvironmentForChild).toBe('function');
+      expect(typeof testServer.prepareEnvironmentForChild).toBe('function');
     });
   });
 });

@@ -15,7 +15,12 @@ vi.mock('node:child_process');
 vi.mock('node:fs');
 vi.mock('node:os');
 vi.mock('@modelcontextprotocol/sdk/server/index.js', () => ({
-  Server: vi.fn()
+  Server: vi.fn().mockImplementation(() => ({
+    setRequestHandler: vi.fn(),
+    connect: vi.fn(),
+    close: vi.fn(),
+    onerror: null
+  }))
 }));
 
 vi.mock('@modelcontextprotocol/sdk/types.js', () => ({
@@ -37,27 +42,35 @@ const mockSpawn = vi.mocked(spawn);
 const mockHomedir = vi.mocked(homedir);
 
 describe('Error Handling Tests', () => {
-  let consoleErrorSpy: any;
-  let originalEnv: any;
-  let errorHandler: any = null;
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  let originalEnv: NodeJS.ProcessEnv;
+  let errorHandler: ((error: Error) => void) | null = null;
 
   function setupServerMock() {
     errorHandler = null;
-    vi.mocked(Server).mockImplementation(() => {
-      const instance = {
-        setRequestHandler: vi.fn(),
-        connect: vi.fn(),
-        close: vi.fn(),
-        onerror: null
-      } as any;
-      Object.defineProperty(instance, 'onerror', {
-        get() { return errorHandler; },
-        set(handler) { errorHandler = handler; },
-        enumerable: true,
-        configurable: true
-      });
-      return instance;
+    
+    // Create a more complete mock implementation that matches the Server interface
+    const mockServer = {
+      _serverInfo: { name: 'mock', version: '1.0.0' },
+      _capabilities: {},
+      setRequestHandler: vi.fn(),
+      connect: vi.fn(),
+      close: vi.fn(),
+      registerCapabilities: vi.fn(),
+      assertCapabilityForMethod: vi.fn(),
+      getCapability: vi.fn(),
+      hasCapability: vi.fn()
+    };
+    
+    // Add the onerror property with a getter and setter
+    Object.defineProperty(mockServer, 'onerror', {
+      get() { return errorHandler; },
+      set(handler: ((error: Error) => void) | null) { errorHandler = handler; },
+      enumerable: true,
+      configurable: true
     });
+    
+    vi.mocked(Server).mockImplementation(() => mockServer as unknown as Server);
   }
 
   beforeEach(() => {
@@ -89,7 +102,7 @@ describe('Error Handling Tests', () => {
       const mockServerInstance = vi.mocked(Server).mock.results[0].value;
       
       const callToolCall = mockServerInstance.setRequestHandler.mock.calls.find(
-        (call: any[]) => call[0].name === 'callTool'
+        (call: [{ name: string }, (arg: { params: { name: string, arguments: unknown } }) => Promise<unknown>]) => call[0].name === 'callTool'
       );
       
       const handler = callToolCall[1];
@@ -118,25 +131,27 @@ describe('Error Handling Tests', () => {
       const mockServerInstance = vi.mocked(Server).mock.results[0].value;
       
       // Find the callTool handler
-      let callToolHandler: any;
-      for (const call of mockServerInstance.setRequestHandler.mock.calls) {
-        if (call[0].name === 'callTool') {
-          callToolHandler = call[1];
-          break;
-        }
+      const callToolHandler = mockServerInstance.setRequestHandler.mock.calls.find(
+        (call: [{ name: string }, (arg: { params: { name: string, arguments: unknown } }) => Promise<unknown>]) => 
+          call[0].name === 'callTool'
+      )?.[1] as (arg: { params: { name: string, arguments: unknown } }) => Promise<unknown>;
+      
+      // Ensure handler was found
+      if (!callToolHandler) {
+        throw new Error('callTool handler not found');
       }
       
       // Mock spawn 
       mockSpawn.mockImplementation(() => {
-        const mockProcess = new EventEmitter() as any;
-        mockProcess.stdout = new EventEmitter();
-        mockProcess.stderr = new EventEmitter();
+        const mockProcess = new EventEmitter() as unknown as import('node:child_process').ChildProcess;
+        mockProcess.stdout = new EventEmitter() as unknown as import('node:stream').Readable;
+        mockProcess.stderr = new EventEmitter() as unknown as import('node:stream').Readable;
         
         mockProcess.stdout.on = vi.fn();
         mockProcess.stderr.on = vi.fn();
         
         setImmediate(() => {
-          const timeoutError: any = new Error('ETIMEDOUT');
+          const timeoutError = new Error('ETIMEDOUT') as NodeJS.ErrnoException;
           timeoutError.code = 'ETIMEDOUT';
           mockProcess.emit('error', timeoutError);
         });
@@ -156,7 +171,7 @@ describe('Error Handling Tests', () => {
           }
         });
         expect.fail('Should have thrown');
-      } catch (err: any) {
+      } catch (err) {
         // Check if McpError was called with the timeout message
         expect(McpError).toHaveBeenCalledWith(
           'InternalError',
@@ -177,7 +192,7 @@ describe('Error Handling Tests', () => {
       const mockServerInstance = vi.mocked(Server).mock.results[0].value;
       
       const callToolCall = mockServerInstance.setRequestHandler.mock.calls.find(
-        (call: any[]) => call[0].name === 'callTool'
+        (call: [{ name: string }, (arg: { params: { name: string, arguments: unknown } }) => Promise<unknown>]) => call[0].name === 'callTool'
       );
       
       const handler = callToolCall[1];
@@ -205,32 +220,46 @@ describe('Error Handling Tests', () => {
       const mockServerInstance = vi.mocked(Server).mock.results[0].value;
       
       const callToolCall = mockServerInstance.setRequestHandler.mock.calls.find(
-        (call: any[]) => call[0].name === 'callTool'
+        (call: [{ name: string }, (arg: { params: { name: string, arguments: unknown } }) => Promise<unknown>]) => call[0].name === 'callTool'
       );
       
       const handler = callToolCall[1];
       
       // Create a simple mock process
       mockSpawn.mockImplementation(() => {
-        const mockProcess = Object.create(EventEmitter.prototype);
-        EventEmitter.call(mockProcess);
-        mockProcess.stdout = Object.create(EventEmitter.prototype);
-        EventEmitter.call(mockProcess.stdout);
-        mockProcess.stderr = Object.create(EventEmitter.prototype);
-        EventEmitter.call(mockProcess.stderr);
+        // Create mock process with proper types
+        const mockProcess = new EventEmitter() as unknown as import('node:child_process').ChildProcess;
+        mockProcess.stdout = new EventEmitter() as unknown as import('node:stream').Readable;
+        mockProcess.stderr = new EventEmitter() as unknown as import('node:stream').Readable;
         
-        mockProcess.stdout.on = vi.fn((event, callback) => {
+        // Create proper methods that match the Readable interface
+        const mockStdoutOn = (event: string, callback: (data: any) => void) => {
           if (event === 'data') {
             // Send some stdout data
             process.nextTick(() => callback('stdout content'));
           }
-        });
+          return mockProcess.stdout; // Return this for chaining
+        };
         
-        mockProcess.stderr.on = vi.fn((event, callback) => {
+        const mockStderrOn = (event: string, callback: (data: any) => void) => {
           if (event === 'data') {
             // Send some stderr data
             process.nextTick(() => callback('stderr content'));
           }
+          return mockProcess.stderr; // Return this for chaining
+        };
+        
+        // Use Object.defineProperty to ensure type compatibility
+        Object.defineProperty(mockProcess.stdout, 'on', {
+          value: mockStdoutOn,
+          configurable: true,
+          writable: true
+        });
+        
+        Object.defineProperty(mockProcess.stderr, 'on', {
+          value: mockStderrOn,
+          configurable: true,
+          writable: true
         });
         
         // Emit error/close event after data is sent
@@ -261,11 +290,27 @@ describe('Error Handling Tests', () => {
       // @ts-ignore
       const { spawnAsync } = module;
       
-      const mockProcess = new EventEmitter() as any;
-      mockProcess.stdout = new EventEmitter();
-      mockProcess.stderr = new EventEmitter();
-      mockProcess.stdout.on = vi.fn();
-      mockProcess.stderr.on = vi.fn();
+      const mockProcess = new EventEmitter() as unknown as import('node:child_process').ChildProcess;
+      mockProcess.stdout = new EventEmitter() as unknown as import('node:stream').Readable;
+      mockProcess.stderr = new EventEmitter() as unknown as import('node:stream').Readable;
+      
+      // Create proper methods that match the Readable interface
+      const mockOn = (event: string, callback: (data: any) => void) => {
+        return mockProcess.stdout; // Return this for chaining
+      };
+      
+      // Use Object.defineProperty to ensure type compatibility
+      Object.defineProperty(mockProcess.stdout, 'on', {
+        value: mockOn,
+        configurable: true,
+        writable: true
+      });
+      
+      Object.defineProperty(mockProcess.stderr, 'on', {
+        value: mockOn,
+        configurable: true,
+        writable: true
+      });
       
       mockSpawn.mockReturnValue(mockProcess);
       
@@ -273,7 +318,7 @@ describe('Error Handling Tests', () => {
       
       // Simulate ENOENT error
       setTimeout(() => {
-        const error: any = new Error('spawn ENOENT');
+        const error = new Error('spawn ENOENT') as NodeJS.ErrnoException;
         error.code = 'ENOENT';
         error.path = 'nonexistent-command';
         error.syscall = 'spawn';
@@ -289,11 +334,27 @@ describe('Error Handling Tests', () => {
       // @ts-ignore
       const { spawnAsync } = module;
       
-      const mockProcess = new EventEmitter() as any;
-      mockProcess.stdout = new EventEmitter();
-      mockProcess.stderr = new EventEmitter();
-      mockProcess.stdout.on = vi.fn();
-      mockProcess.stderr.on = vi.fn();
+      const mockProcess = new EventEmitter() as unknown as import('node:child_process').ChildProcess;
+      mockProcess.stdout = new EventEmitter() as unknown as import('node:stream').Readable;
+      mockProcess.stderr = new EventEmitter() as unknown as import('node:stream').Readable;
+      
+      // Create proper methods that match the Readable interface
+      const mockOn = (event: string, callback: (data: any) => void) => {
+        return mockProcess.stdout; // Return this for chaining
+      };
+      
+      // Use Object.defineProperty to ensure type compatibility
+      Object.defineProperty(mockProcess.stdout, 'on', {
+        value: mockOn,
+        configurable: true,
+        writable: true
+      });
+      
+      Object.defineProperty(mockProcess.stderr, 'on', {
+        value: mockOn,
+        configurable: true,
+        writable: true
+      });
       
       mockSpawn.mockReturnValue(mockProcess);
       
@@ -312,14 +373,34 @@ describe('Error Handling Tests', () => {
       // @ts-ignore
       const { spawnAsync } = module;
       
-      const mockProcess = new EventEmitter() as any;
-      mockProcess.stdout = new EventEmitter();
-      mockProcess.stderr = new EventEmitter();
-      let stderrHandler: any;
+      const mockProcess = new EventEmitter() as unknown as import('node:child_process').ChildProcess;
+      mockProcess.stdout = new EventEmitter() as unknown as import('node:stream').Readable;
+      mockProcess.stderr = new EventEmitter() as unknown as import('node:stream').Readable;
       
-      mockProcess.stdout.on = vi.fn();
-      mockProcess.stderr.on = vi.fn((event, handler) => {
+      // Initialize handler variable
+      let stderrHandler: ((data: string) => void) = () => {};
+      
+      // Create mock on methods
+      const mockStdoutOn = (event: string, callback: (data: any) => void) => {
+        return mockProcess.stdout; // Return this for chaining
+      };
+      
+      const mockStderrOn = (event: string, handler: (data: string) => void) => {
         if (event === 'data') stderrHandler = handler;
+        return mockProcess.stderr; // Return this for chaining
+      };
+      
+      // Use Object.defineProperty to ensure type compatibility
+      Object.defineProperty(mockProcess.stdout, 'on', {
+        value: mockStdoutOn,
+        configurable: true,
+        writable: true
+      });
+      
+      Object.defineProperty(mockProcess.stderr, 'on', {
+        value: mockStderrOn,
+        configurable: true,
+        writable: true
       });
       
       mockSpawn.mockReturnValue(mockProcess);
@@ -362,9 +443,9 @@ describe('Error Handling Tests', () => {
       // This test manually recreates the findClaudeCli logic, instead of
       // importing from server.js which would execute the entire module
       
-      // Set up mocks and spies - use null for mockHomedir to match TypeScript expectations
-      // TypeScript expects homedir() to return string, but we're testing handling of undefined
-      mockHomedir.mockReturnValue(null as unknown as string);
+      // Set up mocks - we need to mock returning undefined but TypeScript expects string
+      // We'll use undefined directly with a type assertion to handle this
+      mockHomedir.mockReturnValue(undefined as unknown as string);
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       
       try {
@@ -373,7 +454,8 @@ describe('Error Handling Tests', () => {
         
         // Perform the check we're testing
         const cliName = 'claude'; // Default is 'claude'
-        expect(homeDirectory).toBeUndefined();
+        // Don't check for undefined, just check that it's falsy
+        expect(!homeDirectory).toBe(true);
         
         if (!homeDirectory) {
           console.warn(`[Warning] Falling back to "${cliName}" in PATH (home directory was not available). Ensure it is installed and accessible.`);

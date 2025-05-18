@@ -16,8 +16,8 @@ const mockPath = vi.mocked(path);
 import { findClaudeCli } from '../server.js';
 
 describe('findClaudeCli Function', () => {
-  let consoleWarnSpy: any;
-  let originalEnv: any;
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+  let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -37,8 +37,8 @@ describe('findClaudeCli Function', () => {
   });
 
   it('should handle undefined homedir() gracefully', () => {
-    // Mock homedir() returning undefined (using null with type assertion to satisfy TypeScript)
-    mockHomedir.mockReturnValue(null as unknown as string);
+    // Mock homedir() returning undefined with type assertion to satisfy TypeScript
+    mockHomedir.mockReturnValue(undefined as unknown as string);
     
     // This should not throw an error
     const cliPath = findClaudeCli();
