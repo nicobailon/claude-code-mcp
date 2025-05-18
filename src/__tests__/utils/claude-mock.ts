@@ -123,7 +123,7 @@ if [[ "$prompt" == echo* ]]; then
     exit 0
   elif echo "$prompt" | grep -q "echo[[:space:]]*'"; then
     # Handle single quotes as well
-    echo_content=$(echo "$prompt" | sed -E 's/^echo[[:space:]]*'"'"'([^'"'"']*)'"'"'.*$/\\1/')
+    echo_content=$(echo "$prompt" | sed -E 's/^echo[[:space:]]*'\''([^'\'']*)'\'\'.*$/\\1/')
     echo "Mock: Executing echo with content: '$echo_content'" >&2
     echo "$echo_content"
     exit 0
