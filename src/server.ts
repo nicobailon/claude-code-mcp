@@ -177,8 +177,8 @@ export class ClaudeCodeServer {
       },
       {
         capabilities: {
-          tools: {},
-        },
+          tools: {}
+        }
       }
     );
 
