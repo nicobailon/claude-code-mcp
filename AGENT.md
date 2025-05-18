@@ -55,3 +55,9 @@ The tool description can be found in `src/server.ts`. When asked to update the C
 - **Clarity in Multi-Step Git Prompts:** For complex, multi-step `claude_code` prompts involving Git operations (like creating branches, committing multiple files, and pushing/creating PRs):
     - Clearly list all files to be staged in the commit (text files, new image assets, etc.).
 - **Automatic Push on PR Branches:** When the user asks to commit changes while on a pull request branch, Claude should automatically push the changes to the remote after committing. This ensures PR updates are immediately visible for review.
+
+## Known Issues
+
+- **Test Suite Working Directory Issue:** The `workdir` parameter is not being properly passed from the server to the mock CLI script in tests. The tests include workarounds that create files directly to ensure side-effect verification passes. This should be fixed in the server implementation.
+- **Race Conditions in Parallel Tests:** The test suite uses an isolated mock system to prevent race conditions when running tests in parallel. Each test should use `getIsolatedMock()` instead of `getSharedMock()` to obtain a mock instance with unique resources.
+- **String Handling in Response Checking:** Test assertions should use `expect.stringContaining()` for comparing text responses due to potential whitespace and newline variations.
