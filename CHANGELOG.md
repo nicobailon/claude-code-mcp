@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2025-05-17
+
+### Added
+- Orchestrator mode for meta-agent workflows with `MCP_ORCHESTRATOR_MODE` environment variable
+- Support for detecting orchestrator mode via `CLAUDE_CLI_NAME` containing "orchestrator"
+- Recursion prevention for spawned instances when in orchestrator mode
+- Enhanced system prompt for orchestrator mode with task delegation guidance
+- Extended debugging with orchestrator mode indicators
+
+### Changed
+- Improved environment variable handling for spawned processes
+
 ## [1.10.12] - 2025-05-17
 
 - Fixed MCP server startup issue by ensuring process runs regardless of module detection
