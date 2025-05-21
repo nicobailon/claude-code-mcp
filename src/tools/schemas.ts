@@ -5,6 +5,7 @@ export const ExecuteCommandArgsSchema = z.object({
   command: z.string(),
   timeout_ms: z.number().optional(),
   shell: z.string().optional(),
+  cwd: z.string().optional(),
   wait: z.boolean().optional().default(true),
 });
 

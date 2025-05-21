@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { executeCommand, readOutput, forceTerminate, listSessions } from '../tools/execute.js';
+import { isCommandAllowed } from '../config.js';
 import { terminalManager } from '../terminal-manager.js';
 import { CommandExecutionResult, ActiveSession } from '../types.js';
 
@@ -63,12 +64,18 @@ describe('Execute tools', () => {
     it('should check command allowed status first', async () => {
       // This test verifies that the isCommandAllowed function is called
       
+      // Override the global mock to return false for this test
+      vi.mocked(isCommandAllowed).mockReturnValueOnce(false);
+      
       // Call the function
       const result = await executeCommand({
         command: 'test command',
         timeout_ms: 1000,
         wait: true
       });
+      
+      // Verify the isCommandAllowed was called with the correct command
+      expect(isCommandAllowed).toHaveBeenCalledWith('test command');
       
       // Verify the security check result (command not allowed)
       expect(result.isError).toBe(true);

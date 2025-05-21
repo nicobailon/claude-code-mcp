@@ -33,7 +33,7 @@ export async function executeCommand(args: ExecuteCommandArgs): Promise<ServerRe
   const result = await terminalManager.executeCommand(
     args.command,
     args.timeout_ms,
-    undefined, // cwd is not provided in this simple implementation
+    args.cwd,
     args.shell
   );
 
@@ -49,7 +49,7 @@ export async function executeCommand(args: ExecuteCommandArgs): Promise<ServerRe
     content: [{
       type: "text",
       text: `Command started with PID ${result.pid}\nInitial output:\n${result.output}${
-        result.isBlocked ? '\n\nCommand is still running. Use read_output to get more output.' : ''
+        result.isBlocked ? '\n\nCommand is still running. Use `read_output` to get more output.' : ''
       }`
     }],
     metadata: {

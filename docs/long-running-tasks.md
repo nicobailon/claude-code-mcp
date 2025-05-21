@@ -23,6 +23,7 @@ Starts a command and returns with a PID rather than waiting for completion.
 - `command` (string, required): The command to execute
 - `timeout_ms` (number, optional): Time to wait for initial output before returning
 - `shell` (string, optional): Specify shell to use (defaults to system default)
+- `cwd` (string, optional): The working directory for command execution
 - `wait` (boolean, optional): Whether to wait for completion (defaults to true)
 
 **Response:**
@@ -140,6 +141,7 @@ Or use the dedicated tool:
 execute_command({
   command: "npm install && npm test",
   timeout_ms: 5000, // Wait 5 seconds for initial output
+  cwd: "/path/to/project", // Specify working directory
   wait: false
 })
 ```
