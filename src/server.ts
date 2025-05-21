@@ -40,6 +40,11 @@ const SERVER_VERSION = "1.11.0";
 // Define debugMode globally using const
 const debugMode = process.env.MCP_CLAUDE_DEBUG === 'true';
 
+// Detect orchestrator mode
+export const isOrchestratorMode = 
+  process.env.MCP_ORCHESTRATOR_MODE === 'true' || 
+  process.env.CLAUDE_CLI_NAME === 'claude-orchestrator';
+
 // Track if this is the first tool use for version printing
 let isFirstToolUse = true;
 
@@ -85,7 +90,14 @@ export function findClaudeCli(): string {
   const cliName = customCliName || 'claude';
 
   // Try local install path: ~/.claude/local/claude (using the original name for local installs)
-  const userPath = join(homedir(), '.claude', 'local', 'claude');
+  const homeDir = homedir();
+  if (!homeDir) {
+    debugLog('[Debug] Home directory is not available, skipping local user path check.');
+    console.warn(`[Warning] Claude CLI not found at ~/.claude/local/claude. Falling back to "${cliName}" in PATH. Ensure it is installed and accessible.`);
+    return cliName;
+  }
+  
+  const userPath = join(homeDir, '.claude', 'local', 'claude');
   debugLog(`[Debug] Checking for Claude CLI at local user path: ${userPath}`);
 
   if (existsSync(userPath)) {
@@ -192,7 +204,7 @@ export class ClaudeCodeServer {
       tools: [
         {
           name: 'claude_code',
-          description: `Claude Code Agent: Your versatile multi-modal assistant for code, file, Git, and terminal operations via Claude CLI. Use \`workFolder\` for contextual execution.
+          description: `${isOrchestratorMode ? '[ORCHESTRATOR MODE ACTIVE] ' : ''}Claude Code Agent: Your versatile multi-modal assistant for code, file, Git, and terminal operations via Claude CLI. ${isOrchestratorMode ? 'Running in orchestrator mode with delegated Claude Code instances.' : ''} Use \`workFolder\` for contextual execution.
 
 • File ops: Create, read, (fuzzy) edit, move, copy, delete, list files, analyze/ocr images, file content analysis
     └─ e.g., "Create /tmp/log.txt with 'system boot'", "Edit main.py to replace 'debug_mode = True' with 'debug_mode = False'", "List files in /src", "Move a specific section somewhere else"

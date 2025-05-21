@@ -74,17 +74,32 @@ export class TerminalManager {
       }
     }
     
-    const spawnOptions = { 
+    // Create environment variable options based on orchestrator mode
+    // Use type annotation to avoid TypeScript errors
+    const envVars: NodeJS.ProcessEnv = { ...process.env };
+    
+    if (envVars.MCP_ORCHESTRATOR_MODE === 'true' || envVars.CLAUDE_CLI_NAME === 'claude-orchestrator') {
+      // In orchestrator mode, clear certain environment variables to prevent loops
+      envVars.CLAUDE_CLI_ORCHESTRATOR_PASSTHROUGH = 'false';
+      envVars.MCP_CLAUDE_DEBUG = 'false';
+      // Clear orchestrator-specific variables
+      delete envVars.MCP_ORCHESTRATOR_MODE;
+      delete envVars.CLAUDE_CLI_NAME;
+    }
+    
+    // Use type annotation to avoid TypeScript errors
+    const spawnOptions: any = { 
       shell: shellToUse,
-      cwd
+      cwd,
+      env: envVars
     };
     
     debugLog(`[TerminalManager] Executing command: ${command} with timeout ${timeoutMs}ms`);
-    const process = this.spawnFn(command, [], spawnOptions);
+    const childProcess = this.spawnFn(command, [], spawnOptions);
     let output = '';
     
-    // Ensure process.pid is defined before proceeding
-    if (!process.pid) {
+    // Ensure childProcess.pid is defined before proceeding
+    if (!childProcess.pid) {
       // Return a consistent error object instead of throwing
       return {
         pid: -1,  // Use -1 to indicate an error state
@@ -94,54 +109,54 @@ export class TerminalManager {
     }
     
     const session: TerminalSession = {
-      pid: process.pid,
-      process,
+      pid: childProcess.pid,
+      process: childProcess,
       lastOutput: '',
       isBlocked: false,
       startTime: new this.dateConstructor()
     };
     
-    this.sessions.set(process.pid, session);
-    debugLog(`[TerminalManager] Created new session with PID: ${process.pid}`);
+    this.sessions.set(childProcess.pid, session);
+    debugLog(`[TerminalManager] Created new session with PID: ${childProcess.pid}`);
 
     return new Promise((resolve) => {
-      process.stdout.on('data', (data) => {
+      childProcess.stdout.on('data', (data: Buffer) => {
         const text = data.toString('utf8'); // Explicitly set encoding
         output += text;
         // Apply buffer size limiting to prevent memory issues
         session.lastOutput = this.limitBufferSize(session.lastOutput + text);
-        debugLog(`[TerminalManager] PID ${process.pid} stdout: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
+        debugLog(`[TerminalManager] PID ${childProcess.pid} stdout: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
       });
 
-      process.stderr.on('data', (data) => {
+      childProcess.stderr.on('data', (data: Buffer) => {
         const text = data.toString('utf8'); // Explicitly set encoding
         output += text;
         // Apply buffer size limiting to prevent memory issues
         session.lastOutput = this.limitBufferSize(session.lastOutput + text);
-        debugLog(`[TerminalManager] PID ${process.pid} stderr: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
+        debugLog(`[TerminalManager] PID ${childProcess.pid} stderr: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
       });
 
       const timeoutHandler = setTimeout(() => {
         session.isBlocked = true;
-        debugLog(`[TerminalManager] Command timeout of ${timeoutMs}ms reached for PID ${process.pid}`);
+        debugLog(`[TerminalManager] Command timeout of ${timeoutMs}ms reached for PID ${childProcess.pid}`);
         resolve({
-          pid: process.pid!,
+          pid: childProcess.pid!,
           output,
           isBlocked: true
         });
       }, timeoutMs);
 
-      process.on('exit', (code) => {
+      childProcess.on('exit', (code: number | null) => {
         clearTimeout(timeoutHandler);
-        debugLog(`[TerminalManager] Process exited with code ${code} for PID ${process.pid}`);
+        debugLog(`[TerminalManager] Process exited with code ${code} for PID ${childProcess.pid}`);
         
-        if (process.pid) {
+        if (childProcess.pid) {
           // Store completed session before removing active session
           // Limit the final output size
           const finalOutput = this.limitBufferSize(output + session.lastOutput);
           
-          this.completedSessions.set(process.pid, {
-            pid: process.pid,
+          this.completedSessions.set(childProcess.pid, {
+            pid: childProcess.pid,
             output: finalOutput,
             exitCode: code,
             startTime: session.startTime,
@@ -167,11 +182,11 @@ export class TerminalManager {
             }
           }
           
-          this.sessions.delete(process.pid);
+          this.sessions.delete(childProcess.pid);
         }
         
         resolve({
-          pid: process.pid!,
+          pid: childProcess.pid!,
           output,
           isBlocked: false
         });
