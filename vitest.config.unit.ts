@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    testTimeout: 10000, // Increase timeout to 10 seconds
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

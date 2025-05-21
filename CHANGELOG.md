@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2025-05-20
+
+### Added
+- Implemented a comprehensive PID-based long-running task management system
+- Added new tools:
+  - `execute_command`: Runs commands with an optional timeout, returns immediately with PID
+  - `read_output`: Gets new output from running commands by PID
+  - `force_terminate`: Terminates long-running processes by PID
+  - `list_sessions`: Lists all active terminal sessions with PIDs and runtimes
+- Added `wait` parameter to `claude_code` tool to support background execution (defaults to `true` for backward compatibility)
+- Created documentation for long-running tasks usage in `src/docs/long-running-tasks.md`
+- Added automatic session cleanup for completed tasks (after 1 hour)
+- Added comprehensive test suite for terminal session manager
+
+### Changed
+- Refactored server to use the terminal session manager for all command execution
+- Enhanced error handling and status reporting for background tasks
+- Updated README with long-running tasks documentation
+
 ## [1.10.12] - 2025-05-17
 
 - Fixed MCP server startup issue by ensuring process runs regardless of module detection

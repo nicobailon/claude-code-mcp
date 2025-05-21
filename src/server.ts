@@ -6,26 +6,50 @@ import {
   ErrorCode,
   ListToolsRequestSchema,
   McpError,
-  type ServerResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve as pathResolve } from 'node:path';
 import * as path from 'path';
-import { readFileSync } from 'node:fs';
+
+import { ServerResult } from './types.js';
+import { 
+  ExecuteCommandArgsSchema, 
+  ReadOutputArgsSchema, 
+  ForceTerminateArgsSchema, 
+  ListSessionsArgsSchema,
+  ClaudeCodeArgsSchema
+} from './tools/schemas.js';
+import { 
+  DEFAULT_CLAUDE_TIMEOUT, 
+  CLEANUP_INTERVAL_MS 
+} from './config.js';
+import { terminalManager } from './terminal-manager.js';
+import {
+  handleExecuteCommand,
+  handleReadOutput,
+  handleForceTerminate,
+  handleListSessions
+} from './handlers/terminal-handlers.js';
+import { zodToJsonSchema } from './utils/zod-to-json-schema.js';
 
 // Server version - update this when releasing new versions
-const SERVER_VERSION = "1.10.12";
+const SERVER_VERSION = "1.11.0";
 
 // Define debugMode globally using const
 const debugMode = process.env.MCP_CLAUDE_DEBUG === 'true';
+
+// No orchestrator mode detection needed
 
 // Track if this is the first tool use for version printing
 let isFirstToolUse = true;
 
 // Capture server startup time when the module loads
 const serverStartupTime = new Date().toISOString();
+
+// Fix memory leak warning by increasing max listeners
+process.setMaxListeners(20);
 
 // Dedicated debug logging function
 export function debugLog(message?: any, ...optionalParams: any[]): void {
@@ -66,7 +90,14 @@ export function findClaudeCli(): string {
   const cliName = customCliName || 'claude';
 
   // Try local install path: ~/.claude/local/claude (using the original name for local installs)
-  const userPath = join(homedir(), '.claude', 'local', 'claude');
+  const homeDir = homedir();
+  if (!homeDir) {
+    debugLog('[Debug] Home directory is not available, skipping local user path check.');
+    console.warn(`[Warning] Claude CLI not found at ~/.claude/local/claude. Falling back to "${cliName}" in PATH. Ensure it is installed and accessible.`);
+    return cliName;
+  }
+  
+  const userPath = join(homeDir, '.claude', 'local', 'claude');
   debugLog(`[Debug] Checking for Claude CLI at local user path: ${userPath}`);
 
   if (existsSync(userPath)) {
@@ -80,14 +111,6 @@ export function findClaudeCli(): string {
   debugLog(`[Debug] Falling back to "${cliName}" command name, relying on spawn/PATH lookup.`);
   console.warn(`[Warning] Claude CLI not found at ~/.claude/local/claude. Falling back to "${cliName}" in PATH. Ensure it is installed and accessible.`);
   return cliName;
-}
-
-/**
- * Interface for Claude Code tool arguments
- */
-interface ClaudeCodeArgs {
-  prompt: string;
-  workFolder?: string;
 }
 
 // Ensure spawnAsync is defined correctly *before* the class
@@ -214,6 +237,7 @@ export class ClaudeCodeServer {
 7. Combine file operations, README updates, and Git commands in a sequence.
 8. Claude can do much more, just ask it!
 
+Set wait=false for long-running tasks to avoid timeouts. Use read_output and related tools to monitor progress.
         `,
           inputSchema: {
             type: 'object',
@@ -226,91 +250,67 @@ export class ClaudeCodeServer {
                 type: 'string',
                 description: 'Mandatory when using file operations or referencing any file. The working directory for the Claude CLI execution. Must be an absolute path.',
               },
+              wait: {
+                type: 'boolean',
+                description: 'Whether to wait for the command to complete. Defaults to true. Set to false to run in the background.',
+                default: true
+              }
             },
             required: ['prompt'],
           },
+        },
+        {
+          name: "execute_command",
+          description: "Execute a terminal command with timeout. Command will continue running in background if it doesn't complete within timeout.",
+          inputSchema: zodToJsonSchema(ExecuteCommandArgsSchema),
+        },
+        {
+          name: "read_output",
+          description: "Read new output from a running terminal session.",
+          inputSchema: zodToJsonSchema(ReadOutputArgsSchema),
+        },
+        {
+          name: "force_terminate",
+          description: "Force terminate a running terminal session.",
+          inputSchema: zodToJsonSchema(ForceTerminateArgsSchema),
+        },
+        {
+          name: "list_sessions",
+          description: "List all active terminal sessions.",
+          inputSchema: zodToJsonSchema(ListSessionsArgsSchema),
         }
       ],
     }));
 
     // Handle tool calls
-    const executionTimeoutMs = 1800000; // 30 minutes timeout
-
-    this.server.setRequestHandler(CallToolRequestSchema, async (args, call): Promise<ServerResult> => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (args, extra) => {
       debugLog('[Debug] Handling CallToolRequest:', args);
 
       // Correctly access toolName from args.params.name
       const toolName = args.params.name;
-      if (toolName !== 'claude_code') {
-        // ErrorCode.ToolNotFound should be ErrorCode.MethodNotFound as per SDK for tools
-        throw new McpError(ErrorCode.MethodNotFound, `Tool ${toolName} not found`);
-      }
-
-      // Robustly access prompt from args.params.arguments
+      
+      // Get tool arguments
       const toolArguments = args.params.arguments;
-      let prompt: string;
-
-      if (
-        toolArguments &&
-        typeof toolArguments === 'object' &&
-        'prompt' in toolArguments &&
-        typeof toolArguments.prompt === 'string'
-      ) {
-        prompt = toolArguments.prompt;
-      } else {
-        throw new McpError(ErrorCode.InvalidParams, 'Missing or invalid required parameter: prompt (must be an object with a string "prompt" property) for claude_code tool');
-      }
-
-      // Determine the working directory
-      let effectiveCwd = homedir(); // Default CWD is user's home directory
-
-      // Check if workFolder is provided in the tool arguments
-      if (toolArguments.workFolder && typeof toolArguments.workFolder === 'string') {
-        const resolvedCwd = pathResolve(toolArguments.workFolder);
-        debugLog(`[Debug] Specified workFolder: ${toolArguments.workFolder}, Resolved to: ${resolvedCwd}`);
-
-        // Check if the resolved path exists
-        if (existsSync(resolvedCwd)) {
-          effectiveCwd = resolvedCwd;
-          debugLog(`[Debug] Using workFolder as CWD: ${effectiveCwd}`);
-        } else {
-          debugLog(`[Warning] Specified workFolder does not exist: ${resolvedCwd}. Using default: ${effectiveCwd}`);
-        }
-      } else {
-        debugLog(`[Debug] No workFolder provided, using default CWD: ${effectiveCwd}`);
-      }
 
       try {
-        debugLog(`[Debug] Attempting to execute Claude CLI with prompt: "${prompt}" in CWD: "${effectiveCwd}"`);
-
-        // Print tool info on first use
-        if (isFirstToolUse) {
-          const versionInfo = `claude_code v${SERVER_VERSION} started at ${serverStartupTime}`;
-          console.error(versionInfo);
-          isFirstToolUse = false;
+        switch (toolName) {
+          case 'claude_code':
+            return await this.handleClaudeCode(toolArguments);
+          case 'execute_command':
+            return await handleExecuteCommand(toolArguments);
+          case 'read_output':
+            return await handleReadOutput(toolArguments);
+          case 'force_terminate':
+            return await handleForceTerminate(toolArguments);
+          case 'list_sessions':
+            return await handleListSessions(toolArguments);
+          default:
+            throw new McpError(ErrorCode.MethodNotFound, `Tool ${toolName} not found`);
         }
-
-        const claudeProcessArgs = ['--dangerously-skip-permissions', '-p', prompt];
-        debugLog(`[Debug] Invoking Claude CLI: ${this.claudeCliPath} ${claudeProcessArgs.join(' ')}`);
-
-        const { stdout, stderr } = await spawnAsync(
-          this.claudeCliPath, // Run the Claude CLI directly
-          claudeProcessArgs, // Pass the arguments
-          { timeout: executionTimeoutMs, cwd: effectiveCwd }
-        );
-
-        debugLog('[Debug] Claude CLI stdout:', stdout.trim());
-        if (stderr) {
-          debugLog('[Debug] Claude CLI stderr:', stderr.trim());
-        }
-
-        // Return stdout content, even if there was stderr, as claude-cli might output main result to stdout.
-        return { content: [{ type: 'text', text: stdout }] };
-
       } catch (error: any) {
-        debugLog('[Error] Error executing Claude CLI:', error);
+        debugLog('[Error] Error handling tool request:', error);
         let errorMessage = error.message || 'Unknown error';
-        // Attempt to include stderr and stdout from the error object if spawnAsync attached them
+        
         if (error.stderr) {
           errorMessage += `\nStderr: ${error.stderr}`;
         }
@@ -318,14 +318,120 @@ export class ClaudeCodeServer {
           errorMessage += `\nStdout: ${error.stdout}`;
         }
 
-        if (error.signal === 'SIGTERM' || (error.message && error.message.includes('ETIMEDOUT')) || (error.code === 'ETIMEDOUT')) {
-          // Reverting to InternalError due to lint issues, but with a specific timeout message.
-          throw new McpError(ErrorCode.InternalError, `Claude CLI command timed out after ${executionTimeoutMs / 1000}s. Details: ${errorMessage}`);
-        }
-        // ErrorCode.ToolCallFailed should be ErrorCode.InternalError or a more specific execution error if available
-        throw new McpError(ErrorCode.InternalError, `Claude CLI execution failed: ${errorMessage}`);
+        throw new McpError(ErrorCode.InternalError, `Tool execution failed: ${errorMessage}`);
       }
     });
+  }
+
+  /**
+   * Handle the claude_code tool
+   */
+  private async handleClaudeCode(args: unknown): Promise<ServerResult> {
+    // Parse and validate arguments
+    const parsed = ClaudeCodeArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for claude_code: ${parsed.error}`);
+    }
+
+    // Extract prompt, workFolder and wait from parsed data
+    const { prompt, workFolder, wait = true } = parsed.data;
+    
+    // Determine the working directory
+    let effectiveCwd = homedir(); // Default CWD is user's home directory
+    
+    // Check if workFolder is provided in the tool arguments
+    if (workFolder && typeof workFolder === 'string') {
+      const resolvedCwd = pathResolve(workFolder);
+      debugLog(`[Debug] Specified workFolder: ${workFolder}, Resolved to: ${resolvedCwd}`);
+
+      // Check if the resolved path exists
+      if (existsSync(resolvedCwd)) {
+        effectiveCwd = resolvedCwd;
+        debugLog(`[Debug] Using workFolder as CWD: ${effectiveCwd}`);
+      } else {
+        debugLog(`[Warning] Specified workFolder does not exist: ${resolvedCwd}. Using default: ${effectiveCwd}`);
+      }
+    } else {
+      debugLog(`[Debug] No workFolder provided, using default CWD: ${effectiveCwd}`);
+    }
+
+    // Print tool info on first use
+    if (isFirstToolUse) {
+      const versionInfo = `claude_code v${SERVER_VERSION} started at ${serverStartupTime}`;
+      console.error(versionInfo);
+      isFirstToolUse = false;
+    }
+
+    // Build the command for Claude CLI
+    const claudeProcessArgs = ['--dangerously-skip-permissions', '-p', prompt];
+    debugLog(`[Debug] Invoking Claude CLI: ${this.claudeCliPath} ${claudeProcessArgs.join(' ')}`);
+    
+    // If wait is true, use the old blocking approach (internally using the new system)
+    if (wait) {
+      const result = await terminalManager.executeCommand(
+        `${this.claudeCliPath} ${claudeProcessArgs.join(' ')}`,
+        DEFAULT_CLAUDE_TIMEOUT, // 30 minutes timeout
+        effectiveCwd
+      );
+      
+      // If the command completed (not blocked), return the full output
+      if (!result.isBlocked) {
+        return {
+          content: [{ type: "text", text: result.output }],
+        };
+      }
+      
+      // If blocked (still running), we need to wait for it to complete
+      return new Promise((resolve) => {
+        const pollingStartTime = Date.now();
+        const maxPollingDuration = DEFAULT_CLAUDE_TIMEOUT * 1000; // Convert to milliseconds
+        
+        const checkInterval = setInterval(async () => {
+          const output = terminalManager.getNewOutput(result.pid);
+          const isRunning = !!terminalManager.listActiveSessions().find(s => s.pid === result.pid);
+          const elapsed = Date.now() - pollingStartTime;
+          
+          // If session is gone or output contains completion message, resolve
+          if (!isRunning || (output && output.includes("Process completed with exit code"))) {
+            clearInterval(checkInterval);
+            resolve({
+              content: [{ type: "text", text: output || result.output }],
+            });
+            return;
+          }
+          
+          // Safety check: if we've been polling for too long, resolve with available output
+          if (elapsed > maxPollingDuration) {
+            clearInterval(checkInterval);
+            debugLog(`[Warning] Polling timeout reached after ${elapsed}ms for PID ${result.pid}`);
+            resolve({
+              content: [{ type: "text", text: output || result.output || `Command still running with PID ${result.pid}. Use read_output to check progress.` }],
+            });
+          }
+        }, 1000);
+      });
+    }
+    
+    // If wait is false, return immediately with PID and initial output
+    const result = await terminalManager.executeCommand(
+      `${this.claudeCliPath} ${claudeProcessArgs.join(' ')}`,
+      5000, // Short timeout to get initial output
+      effectiveCwd
+    );
+    
+    return {
+      content: [{
+        type: "text",
+        text: `Claude Code task started with PID ${result.pid}\nInitial response:\n${result.output}${
+          result.isBlocked ? '\n\nThis task is still running. Use read_output to get more output.' : ''
+        }`
+      }],
+      metadata: {
+        pid: result.pid,
+        isRunning: result.isBlocked,
+        startTime: new Date().toISOString()
+      }
+    };
   }
 
   /**
@@ -336,6 +442,11 @@ export class ClaudeCodeServer {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('Claude Code MCP server running on stdio');
+    
+    // Start a periodic cleanup task for old sessions
+    setInterval(() => {
+      terminalManager.cleanupOldSessions();
+    }, CLEANUP_INTERVAL_MS);
   }
 }
 

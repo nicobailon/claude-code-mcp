@@ -35,15 +35,23 @@ describe('Claude Code MCP E2E Tests', () => {
   });
   
   afterAll(async () => {
-    // Only cleanup mock at the very end
+    // Cleanup mock at the very end
     await cleanupSharedMock();
+    
+    // Add an extra safeguard to kill any leftover mock processes
+    try {
+      const { execSync } = await import('node:child_process');
+      execSync('pkill -f "claude-code-test-mock/claudeMocked"', { stdio: 'ignore' });
+    } catch (error) {
+      // It's okay if no processes were found to kill
+    }
   });
 
   describe('Tool Registration', () => {
     it('should register claude_code tool', async () => {
       const tools = await client.listTools();
       
-      expect(tools).toHaveLength(1);
+      expect(tools).toHaveLength(5);
       expect(tools[0]).toEqual({
         name: 'claude_code',
         description: expect.stringContaining('Claude Code Agent'),
@@ -58,6 +66,11 @@ describe('Claude Code MCP E2E Tests', () => {
               type: 'string',
               description: expect.stringContaining('working directory'),
             },
+            wait: {
+              type: 'boolean',
+              description: expect.stringContaining('wait for the command'),
+              default: expect.anything(),
+            },
           },
           required: ['prompt'],
         },
@@ -70,6 +83,7 @@ describe('Claude Code MCP E2E Tests', () => {
       const response = await client.callTool('claude_code', {
         prompt: 'create a file called test.txt with content "Hello World"',
         workFolder: testDir,
+        wait: true
       });
 
       expect(response).toEqual([{
@@ -79,18 +93,21 @@ describe('Claude Code MCP E2E Tests', () => {
     });
 
     it('should handle errors gracefully', async () => {
-      // The mock should trigger an error
-      await expect(
-        client.callTool('claude_code', {
-          prompt: 'error',
-          workFolder: testDir,
-        })
-      ).rejects.toThrow();
+      // The mock should return an error message, not throw
+      const response = await client.callTool('claude_code', {
+        prompt: 'error',
+        workFolder: testDir,
+        wait: true,
+      });
+      
+      // Expect error message in the response
+      expect(response[0].text).toContain('Error');
     });
 
     it('should use default working directory when not specified', async () => {
       const response = await client.callTool('claude_code', {
         prompt: 'List files in current directory',
+        wait: true
       });
 
       expect(response).toBeTruthy();
@@ -102,6 +119,7 @@ describe('Claude Code MCP E2E Tests', () => {
       const response = await client.callTool('claude_code', {
         prompt: 'Show current working directory',
         workFolder: testDir,
+        wait: true
       });
 
       expect(response).toBeTruthy();
@@ -113,6 +131,7 @@ describe('Claude Code MCP E2E Tests', () => {
       const response = await client.callTool('claude_code', {
         prompt: 'Test prompt',
         workFolder: nonExistentDir,
+        wait: true
       });
       
       expect(response).toBeTruthy();
@@ -133,9 +152,49 @@ describe('Claude Code MCP E2E Tests', () => {
       const response = await client.callTool('claude_code', {
         prompt: 'Debug test prompt',
         workFolder: testDir,
+        wait: true
       });
 
       expect(response).toBeTruthy();
+    });
+  });
+
+  describe('Long-Running Tasks (wait: false)', () => {
+    it('should start a command in background and return PID info', async () => {
+      const response = await client.callTool('claude_code', {
+        prompt: 'echo "testing background execution"',
+        workFolder: testDir,
+        wait: false
+      });
+      
+      expect(response).toBeDefined();
+      expect(Array.isArray(response)).toBe(true);
+      expect(response.length).toBeGreaterThan(0);
+      expect(response[0].type).toBe('text');
+      expect(response[0].text).toContain('PID');
+    });
+
+    it('should handle execute_command tool directly', async () => {
+      const response = await client.callTool('execute_command', {
+        command: 'echo "direct command execution"',
+        cwd: testDir,
+        wait: false
+      });
+      
+      expect(response).toBeDefined();
+      expect(Array.isArray(response)).toBe(true);
+      expect(response.length).toBeGreaterThan(0);
+      expect(response[0].type).toBe('text');
+      expect(response[0].text).toContain('PID');
+    });
+
+    it('should list sessions', async () => {
+      const response = await client.callTool('list_sessions', {});
+      
+      expect(response).toBeDefined();
+      expect(Array.isArray(response)).toBe(true);
+      expect(response.length).toBeGreaterThan(0);
+      expect(response[0].type).toBe('text');
     });
   });
 });
@@ -167,6 +226,7 @@ describe('Integration Tests (Local Only)', () => {
     const response = await client.callTool('claude_code', {
       prompt: 'Create a file called hello.txt with content "Hello from Claude"',
       workFolder: testDir,
+      wait: true
     });
 
     const filePath = join(testDir, 'hello.txt');
@@ -181,6 +241,7 @@ describe('Integration Tests (Local Only)', () => {
     const response = await client.callTool('claude_code', {
       prompt: 'Initialize a git repository and create a README.md file',
       workFolder: testDir,
+      wait: true
     });
 
     expect(existsSync(join(testDir, '.git'))).toBe(true);
