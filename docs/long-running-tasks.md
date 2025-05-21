@@ -31,7 +31,7 @@ Starts a command and returns with a PID rather than waiting for completion.
 {
   "content": [{
     "type": "text",
-    "text": "Command started with PID 1234\nInitial output:\n[output]\n\nCommand is still running. Use read_output to get more output."
+    "text": "Command started with PID 1234\nInitial output:\n[output]\n\nCommand is still running. Use `read_output` to get more output."
   }],
   "metadata": {
     "pid": 1234,
@@ -214,7 +214,7 @@ The following environment variables can be used to configure the long-running ta
 | `SIGINT_TIMEOUT_MS` | 1000 | Time (ms) to wait before SIGKILL after SIGINT |
 | `CLEANUP_INTERVAL_MS` | 600000 | Time (ms) between cleanup runs (10 min) |
 | `MAX_OUTPUT_BUFFER_SIZE` | 1048576 | Maximum size (bytes) of output buffer (1MB) |
-| `ALLOWED_COMMANDS` | (see config.ts) | Comma-separated list of allowed commands |
+| `ALLOWED_COMMANDS` | Common dev/system tools (ls, mkdir, npm, git, etc. - see config.ts for full list) | Comma-separated list of allowed commands |
 | `ALLOW_ALL_COMMANDS` | false | Set to 'true' to bypass command validation |
 
 ## Troubleshooting
