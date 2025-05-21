@@ -5,8 +5,27 @@ import { TerminalSession, CompletedSession, CommandExecutionResult, ActiveSessio
 import { debugLog } from './server.js';
 
 export class TerminalManager {
-  private sessions: Map<number, TerminalSession> = new Map();
-  private completedSessions: Map<number, CompletedSession> = new Map();
+  // Make these protected instead of private for better testability
+  protected sessions: Map<number, TerminalSession>;
+  protected completedSessions: Map<number, CompletedSession>;
+  
+  // Add constructor with dependency injection for better testing
+  constructor(
+    protected spawnFn = spawn,
+    protected dateConstructor: DateConstructor = Date
+  ) {
+    this.sessions = new Map();
+    this.completedSessions = new Map();
+  }
+  
+  // Expose methods for testing
+  public _getActiveSessions(): Map<number, TerminalSession> {
+    return this.sessions;
+  }
+  
+  public _getCompletedSessions(): Map<number, CompletedSession> {
+    return this.completedSessions;
+  }
   
   async executeCommand(
     command: string, 
@@ -32,7 +51,7 @@ export class TerminalManager {
     };
     
     debugLog(`[TerminalManager] Executing command: ${command} with timeout ${timeoutMs}ms`);
-    const process = spawn(command, [], spawnOptions);
+    const process = this.spawnFn(command, [], spawnOptions);
     let output = '';
     
     // Ensure process.pid is defined before proceeding
@@ -50,7 +69,7 @@ export class TerminalManager {
       process,
       lastOutput: '',
       isBlocked: false,
-      startTime: new Date()
+      startTime: new this.dateConstructor()
     };
     
     this.sessions.set(process.pid, session);
@@ -92,7 +111,7 @@ export class TerminalManager {
             output: output + session.lastOutput, // Combine all output
             exitCode: code,
             startTime: session.startTime,
-            endTime: new Date()
+            endTime: new this.dateConstructor()
           });
           
           // Keep only last 100 completed sessions
@@ -162,7 +181,7 @@ export class TerminalManager {
   }
 
   listActiveSessions(): ActiveSession[] {
-    const now = new Date();
+    const now = new this.dateConstructor();
     const sessions = Array.from(this.sessions.values()).map(session => ({
       pid: session.pid,
       isBlocked: session.isBlocked,
@@ -174,7 +193,7 @@ export class TerminalManager {
   }
   
   cleanupOldSessions(maxAgeMs: number = 3600000): void { // Default 1 hour
-    const now = new Date();
+    const now = new this.dateConstructor();
     
     // Clean up completed sessions older than maxAgeMs
     for (const [pid, session] of this.completedSessions.entries()) {

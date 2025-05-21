@@ -268,7 +268,7 @@ Set wait=false for long-running tasks to avoid timeouts. Use read_output and rel
     }));
 
     // Handle tool calls
-    this.server.setRequestHandler(CallToolRequestSchema, async (args): Promise<ServerResult> => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (args, extra) => {
       debugLog('[Debug] Handling CallToolRequest:', args);
 
       // Correctly access toolName from args.params.name

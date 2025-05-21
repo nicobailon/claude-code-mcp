@@ -2,7 +2,7 @@ import { ChildProcess } from 'child_process';
 
 export interface TerminalSession {
   pid: number;
-  process: ChildProcess;
+  process: ChildProcess | any; // Allow any for testing
   lastOutput: string;
   isBlocked: boolean;
   startTime: Date;
@@ -28,7 +28,7 @@ export interface CommandExecutionResult {
   isBlocked: boolean;
 }
 
-// Extend the ServerResult interface to include optional metadata
+// Define ServerResult interface
 export interface ServerResult {
   content: Array<{
     type: string;
@@ -43,4 +43,5 @@ export interface ServerResult {
     exitCode?: number;
     runtime?: number;
   };
+  [key: string]: any; // Allow additional properties expected by MCP
 }

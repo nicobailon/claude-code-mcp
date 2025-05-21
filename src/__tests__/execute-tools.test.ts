@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { executeCommand, readOutput, forceTerminate, listSessions } from '../tools/execute';
-import { terminalManager } from '../terminal-manager';
+import { executeCommand, readOutput, forceTerminate, listSessions } from '../tools/execute.js';
+import { terminalManager } from '../terminal-manager.js';
+import { CommandExecutionResult, ActiveSession } from '../types.js';
 
-// Mock the terminal manager
-vi.mock('../terminal-manager', () => ({
+// Mock the terminal manager with proper types
+vi.mock('../terminal-manager.js', () => ({
   terminalManager: {
     executeCommand: vi.fn(),
     getNewOutput: vi.fn(),
@@ -13,7 +14,7 @@ vi.mock('../terminal-manager', () => ({
 }));
 
 // Mock the debugLog function
-vi.mock('../server', () => ({
+vi.mock('../server.js', () => ({
   debugLog: vi.fn()
 }));
 
@@ -29,6 +30,15 @@ describe('Execute tools', () => {
         pid: 1234,
         output: 'test output',
         isBlocked: true
+      });
+      
+      // Mock Date to return a specific ISO string
+      const mockDate = new Date('2025-05-20T12:00:00Z');
+      const mockISOString = '2025-05-20T12:00:00.000Z';
+      vi.spyOn(global, 'Date').mockImplementation(() => {
+        return {
+          toISOString: () => mockISOString
+        } as unknown as Date;
       });
 
       // Call the function
@@ -46,7 +56,7 @@ describe('Execute tools', () => {
         metadata: {
           pid: 1234,
           isRunning: true,
-          startTime: expect.any(String)
+          startTime: mockISOString
         }
       });
 
