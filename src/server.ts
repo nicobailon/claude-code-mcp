@@ -40,10 +40,7 @@ const SERVER_VERSION = "1.11.0";
 // Define debugMode globally using const
 const debugMode = process.env.MCP_CLAUDE_DEBUG === 'true';
 
-// Detect orchestrator mode
-export const isOrchestratorMode = 
-  process.env.MCP_ORCHESTRATOR_MODE === 'true' || 
-  process.env.CLAUDE_CLI_NAME === 'claude-orchestrator';
+// No orchestrator mode detection needed
 
 // Track if this is the first tool use for version printing
 let isFirstToolUse = true;
@@ -204,7 +201,7 @@ export class ClaudeCodeServer {
       tools: [
         {
           name: 'claude_code',
-          description: `${isOrchestratorMode ? '[ORCHESTRATOR MODE ACTIVE] ' : ''}Claude Code Agent: Your versatile multi-modal assistant for code, file, Git, and terminal operations via Claude CLI. ${isOrchestratorMode ? 'Running in orchestrator mode with delegated Claude Code instances.' : ''} Use \`workFolder\` for contextual execution.
+          description: `Claude Code Agent: Your versatile multi-modal assistant for code, file, Git, and terminal operations via Claude CLI. Use \`workFolder\` for contextual execution.
 
 • File ops: Create, read, (fuzzy) edit, move, copy, delete, list files, analyze/ocr images, file content analysis
     └─ e.g., "Create /tmp/log.txt with 'system boot'", "Edit main.py to replace 'debug_mode = True' with 'debug_mode = False'", "List files in /src", "Move a specific section somewhere else"

@@ -74,18 +74,8 @@ export class TerminalManager {
       }
     }
     
-    // Create environment variable options based on orchestrator mode
-    // Use type annotation to avoid TypeScript errors
+    // Simply pass the current environment variables
     const envVars: NodeJS.ProcessEnv = { ...process.env };
-    
-    if (envVars.MCP_ORCHESTRATOR_MODE === 'true' || envVars.CLAUDE_CLI_NAME === 'claude-orchestrator') {
-      // In orchestrator mode, clear certain environment variables to prevent loops
-      envVars.CLAUDE_CLI_ORCHESTRATOR_PASSTHROUGH = 'false';
-      envVars.MCP_CLAUDE_DEBUG = 'false';
-      // Clear orchestrator-specific variables
-      delete envVars.MCP_ORCHESTRATOR_MODE;
-      delete envVars.CLAUDE_CLI_NAME;
-    }
     
     // Use type annotation to avoid TypeScript errors
     const spawnOptions: any = { 
