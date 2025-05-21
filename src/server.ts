@@ -48,6 +48,9 @@ let isFirstToolUse = true;
 // Capture server startup time when the module loads
 const serverStartupTime = new Date().toISOString();
 
+// Fix memory leak warning by increasing max listeners
+process.setMaxListeners(20);
+
 // Dedicated debug logging function
 export function debugLog(message?: any, ...optionalParams: any[]): void {
   if (debugMode) {
