@@ -7,27 +7,34 @@ import {
 } from './schemas.js';
 import { ServerResult } from '../types.js';
 import { debugLog } from '../server.js';
+import { isCommandAllowed } from '../config.js';
+import { z } from 'zod';
 
-export async function executeCommand(args: unknown): Promise<ServerResult> {
-  const parsed = ExecuteCommandArgsSchema.safeParse(args);
-  if (!parsed.success) {
+// Define types based on schema outputs for better type safety
+type ExecuteCommandArgs = z.infer<typeof ExecuteCommandArgsSchema>;
+type ReadOutputArgs = z.infer<typeof ReadOutputArgsSchema>;
+type ForceTerminateArgs = z.infer<typeof ForceTerminateArgsSchema>;
+type ListSessionsArgs = z.infer<typeof ListSessionsArgsSchema>;
+
+export async function executeCommand(args: ExecuteCommandArgs): Promise<ServerResult> {
+  // Command validation - security check
+  if (!isCommandAllowed(args.command)) {
     return {
-      content: [{ type: "text", text: `Error: Invalid arguments for execute_command: ${parsed.error}` }],
+      content: [{ 
+        type: "text", 
+        text: `Error: Command not allowed for security reasons: '${args.command}'\n\nPlease use only allowed commands. Contact the administrator to add commands to the allowlist if needed.` 
+      }],
       isError: true,
     };
   }
 
-  // Note: Command validation logic would go here
-  // In a real implementation, we'd want to validate the command is allowed
-  // For now we'll just execute anything
-
-  debugLog(`[execute_command] Executing command: ${parsed.data.command}`);
+  debugLog(`[execute_command] Executing command: ${args.command}`);
   
   const result = await terminalManager.executeCommand(
-    parsed.data.command,
-    parsed.data.timeout_ms,
+    args.command,
+    args.timeout_ms,
     undefined, // cwd is not provided in this simple implementation
-    parsed.data.shell
+    args.shell
   );
 
   // Check for error condition (pid = -1)
@@ -53,20 +60,12 @@ export async function executeCommand(args: unknown): Promise<ServerResult> {
   };
 }
 
-export async function readOutput(args: unknown): Promise<ServerResult> {
-  const parsed = ReadOutputArgsSchema.safeParse(args);
-  if (!parsed.success) {
-    return {
-      content: [{ type: "text", text: `Error: Invalid arguments for read_output: ${parsed.error}` }],
-      isError: true,
-    };
-  }
-
-  debugLog(`[read_output] Reading output for PID: ${parsed.data.pid}`);
+export async function readOutput(args: ReadOutputArgs): Promise<ServerResult> {
+  debugLog(`[read_output] Reading output for PID: ${args.pid}`);
   
-  const output = terminalManager.getNewOutput(parsed.data.pid);
+  const output = terminalManager.getNewOutput(args.pid);
   const sessions = terminalManager.listActiveSessions();
-  const session = sessions.find(s => s.pid === parsed.data.pid);
+  const session = sessions.find(s => s.pid === args.pid);
   
   // If the session is active
   if (session) {
@@ -74,11 +73,11 @@ export async function readOutput(args: unknown): Promise<ServerResult> {
       content: [{
         type: "text",
         text: output === null
-          ? `No session found for PID ${parsed.data.pid}`
+          ? `No session found for PID ${args.pid}`
           : output
       }],
       metadata: {
-        pid: parsed.data.pid,
+        pid: args.pid,
         isRunning: true,
         runtime: Math.round(session.runtime / 1000) // Convert to seconds
       }
@@ -92,7 +91,7 @@ export async function readOutput(args: unknown): Promise<ServerResult> {
         text: output
       }],
       metadata: {
-        pid: parsed.data.pid,
+        pid: args.pid,
         isRunning: false
       }
     };
@@ -102,40 +101,32 @@ export async function readOutput(args: unknown): Promise<ServerResult> {
     return {
       content: [{
         type: "text",
-        text: `No session found for PID ${parsed.data.pid}`
+        text: `No session found for PID ${args.pid}`
       }],
       isError: true
     };
   }
 }
 
-export async function forceTerminate(args: unknown): Promise<ServerResult> {
-  const parsed = ForceTerminateArgsSchema.safeParse(args);
-  if (!parsed.success) {
-    return {
-      content: [{ type: "text", text: `Error: Invalid arguments for force_terminate: ${parsed.error}` }],
-      isError: true,
-    };
-  }
-
-  debugLog(`[force_terminate] Terminating PID: ${parsed.data.pid}`);
+export async function forceTerminate(args: ForceTerminateArgs): Promise<ServerResult> {
+  debugLog(`[force_terminate] Terminating PID: ${args.pid}`);
   
-  const success = terminalManager.forceTerminate(parsed.data.pid);
+  const success = terminalManager.forceTerminate(args.pid);
   return {
     content: [{
       type: "text",
       text: success
-        ? `Successfully initiated termination of session ${parsed.data.pid}`
-        : `No active session found for PID ${parsed.data.pid}`
+        ? `Successfully initiated termination of session ${args.pid}`
+        : `No active session found for PID ${args.pid}`
     }],
     metadata: {
-      pid: parsed.data.pid,
+      pid: args.pid,
       isRunning: false
     }
   };
 }
 
-export async function listSessions(): Promise<ServerResult> {
+export async function listSessions(_args: ListSessionsArgs): Promise<ServerResult> {
   debugLog(`[list_sessions] Listing active sessions`);
   
   const sessions = terminalManager.listActiveSessions();

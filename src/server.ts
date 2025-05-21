@@ -21,7 +21,10 @@ import {
   ListSessionsArgsSchema,
   ClaudeCodeArgsSchema
 } from './tools/schemas.js';
-import { DEFAULT_CLAUDE_TIMEOUT } from './config.js';
+import { 
+  DEFAULT_CLAUDE_TIMEOUT, 
+  CLEANUP_INTERVAL_MS 
+} from './config.js';
 import { terminalManager } from './terminal-manager.js';
 import {
   handleExecuteCommand,
@@ -417,7 +420,7 @@ Set wait=false for long-running tasks to avoid timeouts. Use read_output and rel
     // Start a periodic cleanup task for old sessions
     setInterval(() => {
       terminalManager.cleanupOldSessions();
-    }, 600000); // Run every 10 minutes
+    }, CLEANUP_INTERVAL_MS);
   }
 }
 

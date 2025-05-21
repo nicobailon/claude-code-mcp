@@ -180,11 +180,66 @@ force_terminate({
 - Store PIDs in your conversation context to track multiple concurrent tasks
 - Clean up (terminate) tasks that are no longer needed
 
+## Security Considerations
+
+The `execute_command` tool runs shell commands with the same privileges as the Claude Code MCP server itself. For security reasons:
+
+1. **Command Validation**: By default, commands are validated against an allowlist of permitted commands.
+   - Only commands that start with entries in the allowlist will be executed
+   - This helps prevent arbitrary code execution exploits
+
+2. **Configuring the Allowlist**:
+   - The default allowlist includes common safe commands (ls, git status, npm run, etc.)
+   - To add custom commands, set the `ALLOWED_COMMANDS` environment variable as a comma-separated list
+   - For unrestricted command execution (USE WITH CAUTION), set `ALLOW_ALL_COMMANDS=true`
+
+3. **Security Implications**:
+   - Remember that long-running commands continue to run with the same privileges, even after clients disconnect
+   - Extremely long-running sessions (24+ hours) are automatically terminated as a safety measure
+   - Always validate user input before passing it to the `execute_command` tool
+
+## Configuration Options
+
+The following environment variables can be used to configure the long-running task system:
+
+| Environment Variable | Default Value | Description |
+|----------------------|---------------|-------------|
+| `DEFAULT_COMMAND_TIMEOUT` | 30000 | Default timeout (ms) for commands |
+| `DEFAULT_CLAUDE_TIMEOUT` | 1800000 | Default timeout (ms) for claude_code (30 min) |
+| `MAX_COMPLETED_SESSIONS` | 100 | Maximum number of completed sessions to keep |
+| `COMPLETED_SESSION_MAX_AGE_MS` | 3600000 | Time (ms) to keep completed sessions (1 hour) |
+| `SIGINT_TIMEOUT_MS` | 1000 | Time (ms) to wait before SIGKILL after SIGINT |
+| `CLEANUP_INTERVAL_MS` | 600000 | Time (ms) between cleanup runs (10 min) |
+| `MAX_OUTPUT_BUFFER_SIZE` | 1048576 | Maximum size (bytes) of output buffer (1MB) |
+| `ALLOWED_COMMANDS` | (see config.ts) | Comma-separated list of allowed commands |
+| `ALLOW_ALL_COMMANDS` | false | Set to 'true' to bypass command validation |
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+1. **Command Not Allowed**
+   - **Error**: "Command not allowed for security reasons"
+   - **Solution**: Use an allowed command or configure the `ALLOWED_COMMANDS` environment variable
+
+2. **No Session Found**
+   - **Error**: "No session found for PID X"
+   - **Solution**: The session may have expired. Sessions are cleaned up after 1 hour of inactivity.
+
+3. **Output Truncated**
+   - **Issue**: "[Output truncated due to size limits...]" appears in output
+   - **Solution**: The output has exceeded the buffer size limit (default 1MB). Increase `MAX_OUTPUT_BUFFER_SIZE` if needed.
+
+4. **Process Never Completes**
+   - **Issue**: A long-running task continues indefinitely
+   - **Solution**: Use `force_terminate` to stop the process, or wait for the automatic cleanup (24+ hours)
+
 ## Session Management Details
 
-- Completed sessions are stored for 1 hour (configurable via the `maxAgeMs` parameter in `cleanupOldSessions`)
-- A maximum of 100 completed sessions are kept in memory
+- Completed sessions are stored for 1 hour (configurable via `COMPLETED_SESSION_MAX_AGE_MS`)
+- A maximum of `MAX_COMPLETED_SESSIONS` (default: 100) completed sessions are kept in memory
 - Active sessions are maintained until they complete or are forcefully terminated
+- Sessions with excessive output will have their oldest output truncated to prevent memory issues
 
 ## Implementation Notes
 
@@ -194,3 +249,5 @@ This system is implemented using:
 2. Separate maps for active and completed sessions
 3. Automatic cleanup to prevent memory leaks
 4. Graceful termination with SIGINT followed by SIGKILL if needed
+5. Buffer size limiting to prevent memory issues with large outputs
+6. Command validation to prevent security issues

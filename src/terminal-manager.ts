@@ -1,5 +1,12 @@
 import { spawn, ChildProcess } from 'child_process';
-import { DEFAULT_COMMAND_TIMEOUT } from './config.js';
+import { 
+  DEFAULT_COMMAND_TIMEOUT, 
+  MAX_COMPLETED_SESSIONS, 
+  COMPLETED_SESSION_MAX_AGE_MS,
+  SIGINT_TIMEOUT_MS,
+  MAX_OUTPUT_BUFFER_SIZE,
+  getEnvConfig
+} from './config.js';
 import { configManager } from './config.js';
 import { TerminalSession, CompletedSession, CommandExecutionResult, ActiveSession } from './types.js';
 import { debugLog } from './server.js';
@@ -8,6 +15,7 @@ export class TerminalManager {
   // Make these protected instead of private for better testability
   protected sessions: Map<number, TerminalSession>;
   protected completedSessions: Map<number, CompletedSession>;
+  protected config: ReturnType<typeof getEnvConfig>;
   
   // Add constructor with dependency injection for better testing
   constructor(
@@ -16,6 +24,7 @@ export class TerminalManager {
   ) {
     this.sessions = new Map();
     this.completedSessions = new Map();
+    this.config = getEnvConfig();
   }
   
   // Expose methods for testing
@@ -27,9 +36,28 @@ export class TerminalManager {
     return this.completedSessions;
   }
   
+  /**
+   * Limits the size of a buffer string to prevent memory issues
+   * @param buffer The string buffer to limit
+   * @param maxSize Maximum size in bytes/chars
+   * @returns Truncated buffer with warning if needed
+   */
+  protected limitBufferSize(buffer: string, maxSize: number = this.config.MAX_OUTPUT_BUFFER_SIZE): string {
+    if (buffer.length <= maxSize) {
+      return buffer;
+    }
+    
+    // Keep the last portion of the buffer that fits within maxSize, minus space for the warning
+    const warningMessage = "\n\n[Output truncated due to size limits. Oldest output has been discarded.]\n\n";
+    const truncatedSize = maxSize - warningMessage.length;
+    
+    // Return the truncated buffer with a warning message
+    return warningMessage + buffer.substring(buffer.length - truncatedSize);
+  }
+  
   async executeCommand(
     command: string, 
-    timeoutMs: number = DEFAULT_COMMAND_TIMEOUT, 
+    timeoutMs: number = this.config.DEFAULT_COMMAND_TIMEOUT, 
     cwd?: string,
     shell?: string
   ): Promise<CommandExecutionResult> {
@@ -42,6 +70,7 @@ export class TerminalManager {
       } catch (error) {
         // If there's an error getting the config, fall back to default
         shellToUse = true;
+        debugLog(`[TerminalManager] Warning: Failed to get shell config, falling back to default shell`);
       }
     }
     
@@ -77,16 +106,18 @@ export class TerminalManager {
 
     return new Promise((resolve) => {
       process.stdout.on('data', (data) => {
-        const text = data.toString();
+        const text = data.toString('utf8'); // Explicitly set encoding
         output += text;
-        session.lastOutput += text;
+        // Apply buffer size limiting to prevent memory issues
+        session.lastOutput = this.limitBufferSize(session.lastOutput + text);
         debugLog(`[TerminalManager] PID ${process.pid} stdout: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
       });
 
       process.stderr.on('data', (data) => {
-        const text = data.toString();
+        const text = data.toString('utf8'); // Explicitly set encoding
         output += text;
-        session.lastOutput += text;
+        // Apply buffer size limiting to prevent memory issues
+        session.lastOutput = this.limitBufferSize(session.lastOutput + text);
         debugLog(`[TerminalManager] PID ${process.pid} stderr: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
       });
 
@@ -106,18 +137,34 @@ export class TerminalManager {
         
         if (process.pid) {
           // Store completed session before removing active session
+          // Limit the final output size
+          const finalOutput = this.limitBufferSize(output + session.lastOutput);
+          
           this.completedSessions.set(process.pid, {
             pid: process.pid,
-            output: output + session.lastOutput, // Combine all output
+            output: finalOutput,
             exitCode: code,
             startTime: session.startTime,
             endTime: new this.dateConstructor()
           });
           
-          // Keep only last 100 completed sessions
-          if (this.completedSessions.size > 100) {
-            const oldestKey = Array.from(this.completedSessions.keys())[0];
-            this.completedSessions.delete(oldestKey);
+          // Keep only the configured maximum number of completed sessions
+          if (this.completedSessions.size > this.config.MAX_COMPLETED_SESSIONS) {
+            // Find the oldest session by end time
+            let oldestKey = -1;
+            let oldestTime = Number.MAX_SAFE_INTEGER;
+            
+            for (const [pid, session] of this.completedSessions.entries()) {
+              if (session.endTime.getTime() < oldestTime) {
+                oldestTime = session.endTime.getTime();
+                oldestKey = pid;
+              }
+            }
+            
+            if (oldestKey !== -1) {
+              this.completedSessions.delete(oldestKey);
+              debugLog(`[TerminalManager] Deleted oldest completed session PID ${oldestKey}`);
+            }
           }
           
           this.sessions.delete(process.pid);
@@ -166,12 +213,13 @@ export class TerminalManager {
       debugLog(`[TerminalManager] Sending SIGINT to PID ${pid}`);
       session.process.kill('SIGINT');
       
+      // Use configurable timeout before sending SIGKILL
       setTimeout(() => {
         if (this.sessions.has(pid)) {
           debugLog(`[TerminalManager] Process still running after SIGINT, sending SIGKILL to PID ${pid}`);
           session.process.kill('SIGKILL');
         }
-      }, 1000);
+      }, this.config.SIGINT_TIMEOUT_MS);
       
       return true;
     } catch (error) {
@@ -192,7 +240,7 @@ export class TerminalManager {
     return sessions;
   }
   
-  cleanupOldSessions(maxAgeMs: number = 3600000): void { // Default 1 hour
+  cleanupOldSessions(maxAgeMs: number = this.config.COMPLETED_SESSION_MAX_AGE_MS): void {
     const now = new this.dateConstructor();
     
     // Clean up completed sessions older than maxAgeMs
@@ -201,6 +249,16 @@ export class TerminalManager {
       if (age > maxAgeMs) {
         this.completedSessions.delete(pid);
         debugLog(`[TerminalManager] Cleaned up completed session PID ${pid}, age: ${(age/1000).toFixed(0)}s`);
+      }
+    }
+    
+    // Check for and terminate any extremely long-running active sessions (24 hours+)
+    const maxActiveSessionAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    for (const [pid, session] of this.sessions.entries()) {
+      const age = now.getTime() - session.startTime.getTime();
+      if (age > maxActiveSessionAge) {
+        debugLog(`[TerminalManager] Force terminating long-running session PID ${pid}, age: ${(age/1000/60/60).toFixed(1)} hours`);
+        this.forceTerminate(pid);
       }
     }
   }

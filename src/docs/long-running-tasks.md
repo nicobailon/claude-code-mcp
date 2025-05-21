@@ -69,3 +69,13 @@ For tasks that may take longer than a few seconds:
 - If you lose track of a PID, use list_sessions() to recover it
 - You can set a custom timeout with timeout_ms parameter (in milliseconds)
 - By default, completed session information is kept for 1 hour
+
+## Security Considerations
+
+The `execute_command` tool runs commands with the same privileges as the Claude Code MCP server. For security reasons:
+
+1. All commands are validated against an allowlist of permitted commands
+2. To add custom commands to the allowlist, set the `ALLOWED_COMMANDS` environment variable as a comma-separated list
+3. For unrestricted command execution (USE WITH CAUTION), set `ALLOW_ALL_COMMANDS=true`
+
+Remember that any long-running commands will continue to run with the same privileges, even after the user disconnects.

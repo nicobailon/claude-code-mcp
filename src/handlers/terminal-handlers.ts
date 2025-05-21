@@ -67,5 +67,5 @@ export async function handleListSessions(args: unknown): Promise<ServerResult> {
       isError: true,
     };
   }
-  return listSessions();
+  return listSessions(parsed.data);
 }
