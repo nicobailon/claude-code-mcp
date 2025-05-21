@@ -71,9 +71,19 @@ fi
   }
 
   /**
-   * Cleanup the mock Claude CLI
+   * Cleanup the mock Claude CLI and terminate any running instances
    */
   async cleanup(): Promise<void> {
+    // First terminate any running mock processes
+    try {
+      const { execSync } = await import('node:child_process');
+      // Find and kill all mock Claude processes
+      execSync(`pkill -f "${this.mockPath}"`, { stdio: 'ignore' });
+    } catch (error) {
+      // It's okay if no processes were found to kill
+    }
+
+    // Remove the mock file
     const { rm } = await import('node:fs/promises');
     await rm(this.mockPath, { force: true });
   }

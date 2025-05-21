@@ -26,4 +26,13 @@ export async function cleanupSharedMock(): Promise<void> {
     await sharedMock.cleanup();
     sharedMock = null;
   }
+  
+  // Add an extra safeguard to clean up any orphaned processes
+  try {
+    const { execSync } = await import('node:child_process');
+    // Gracefully terminate any mock processes still running
+    execSync('pkill -f "claude-code-test-mock/claudeMocked"', { stdio: 'ignore' });
+  } catch (error) {
+    // It's okay if no processes were found to kill
+  }
 }
