@@ -139,6 +139,8 @@ Executes a prompt directly using the Claude Code CLI with `--dangerously-skip-pe
 
 **Arguments:**
 - `prompt` (string, required): The prompt to send to Claude Code.
+- `workFolder` (string, optional): The working directory for the Claude CLI execution. Must be an absolute path.
+- `wait` (boolean, optional): Whether to wait for the command to complete. Defaults to `true`. Set to `false` to run in the background.
 - `options` (object, optional):
   - `tools` (array of strings, optional): Specific Claude tools to enable (e.g., `Bash`, `Read`, `Write`). Common tools are enabled by default.
 
@@ -177,6 +179,17 @@ Here's an example of the Claude Code tool listing files in a directory:
 ## Key Use Cases
 
 This server, through its unified `claude_code` tool, unlocks a wide range of powerful capabilities by giving your AI direct access to the Claude Code CLI. Here are some examples of what you can achieve:
+
+### Long-Running Tasks
+
+The server now supports long-running tasks that can continue executing even after the initial client timeout:
+
+- Run tasks with `wait=false` parameter to execute them in the background
+- Monitor progress with `read_output(pid=1234)` to get new output
+- List active tasks with `list_sessions()`
+- Terminate running tasks with `force_terminate(pid=1234)`
+
+<img src="assets/claude_code_example_20250515.png" alt="Claude Code Long-Running Tasks Example" width="50%">
 
 1.  **Code Generation, Analysis & Refactoring:**
     -   `"Generate a Python script to parse CSV data and output JSON."`
@@ -268,6 +281,8 @@ The server's behavior can be customized using these environment variables:
 - `CLAUDE_CLI_PATH`: Absolute path to the Claude CLI executable.
   - Default: Checks `~/.claude/local/claude`, then falls back to `claude` (expecting it in PATH).
 - `MCP_CLAUDE_DEBUG`: Set to `true` for verbose debug logging from this MCP server. Default: `false`.
+- `DEFAULT_COMMAND_TIMEOUT`: Timeout for command execution in milliseconds. Default: `30000` (30 seconds).
+- `DEFAULT_CLAUDE_TIMEOUT`: Timeout for Claude CLI execution in milliseconds. Default: `1800000` (30 minutes).
 
 These can be set in your shell environment or within the `env` block of your `mcp.json` server configuration (though the `env` block in `mcp.json` examples was removed for simplicity, it's still a valid way to set them for the server process if needed).
 
