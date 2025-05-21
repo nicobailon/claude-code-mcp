@@ -158,6 +158,45 @@ describe('Claude Code MCP E2E Tests', () => {
       expect(response).toBeTruthy();
     });
   });
+
+  describe('Long-Running Tasks (wait: false)', () => {
+    it('should start a command in background and return PID info', async () => {
+      const response = await client.callTool('claude_code', {
+        prompt: 'echo "testing background execution"',
+        workFolder: testDir,
+        wait: false
+      });
+      
+      expect(response).toBeDefined();
+      expect(Array.isArray(response)).toBe(true);
+      expect(response.length).toBeGreaterThan(0);
+      expect(response[0].type).toBe('text');
+      expect(response[0].text).toContain('PID');
+    });
+
+    it('should handle execute_command tool directly', async () => {
+      const response = await client.callTool('execute_command', {
+        command: 'echo "direct command execution"',
+        cwd: testDir,
+        wait: false
+      });
+      
+      expect(response).toBeDefined();
+      expect(Array.isArray(response)).toBe(true);
+      expect(response.length).toBeGreaterThan(0);
+      expect(response[0].type).toBe('text');
+      expect(response[0].text).toContain('PID');
+    });
+
+    it('should list sessions', async () => {
+      const response = await client.callTool('list_sessions', {});
+      
+      expect(response).toBeDefined();
+      expect(Array.isArray(response)).toBe(true);
+      expect(response.length).toBeGreaterThan(0);
+      expect(response[0].type).toBe('text');
+    });
+  });
 });
 
 describe('Integration Tests (Local Only)', () => {

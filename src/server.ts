@@ -383,15 +383,29 @@ Set wait=false for long-running tasks to avoid timeouts. Use read_output and rel
       
       // If blocked (still running), we need to wait for it to complete
       return new Promise((resolve) => {
+        const pollingStartTime = Date.now();
+        const maxPollingDuration = DEFAULT_CLAUDE_TIMEOUT * 1000; // Convert to milliseconds
+        
         const checkInterval = setInterval(async () => {
           const output = terminalManager.getNewOutput(result.pid);
           const isRunning = !!terminalManager.listActiveSessions().find(s => s.pid === result.pid);
+          const elapsed = Date.now() - pollingStartTime;
           
           // If session is gone or output contains completion message, resolve
           if (!isRunning || (output && output.includes("Process completed with exit code"))) {
             clearInterval(checkInterval);
             resolve({
               content: [{ type: "text", text: output || result.output }],
+            });
+            return;
+          }
+          
+          // Safety check: if we've been polling for too long, resolve with available output
+          if (elapsed > maxPollingDuration) {
+            clearInterval(checkInterval);
+            debugLog(`[Warning] Polling timeout reached after ${elapsed}ms for PID ${result.pid}`);
+            resolve({
+              content: [{ type: "text", text: output || result.output || `Command still running with PID ${result.pid}. Use read_output to check progress.` }],
             });
           }
         }, 1000);

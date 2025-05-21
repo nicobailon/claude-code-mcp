@@ -36,7 +36,7 @@ Starts a command and returns with a PID rather than waiting for completion.
   "metadata": {
     "pid": 1234,
     "isRunning": true,
-    "startTime": "2025-05-20T10:30:00Z"
+    "startTime": "2025-05-20T10:30:00.000Z"
   }
 }
 ```
@@ -192,7 +192,8 @@ The `execute_command` tool runs shell commands with the same privileges as the C
 
 2. **Configuring the Allowlist**:
    - The default allowlist includes common safe commands (ls, git status, npm run, etc.)
-   - To add custom commands, set the `ALLOWED_COMMANDS` environment variable as a comma-separated list
+   - **Important**: Setting `ALLOWED_COMMANDS` completely replaces the default list - it does not append to it
+   - To use custom commands while keeping defaults, explicitly include both in your comma-separated list
    - For unrestricted command execution (USE WITH CAUTION), set `ALLOW_ALL_COMMANDS=true`
 
 3. **Security Implications**:

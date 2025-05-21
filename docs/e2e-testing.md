@@ -54,6 +54,7 @@ The integration tests are marked with `.skip()` by default and will only run whe
 - Simple prompt execution
 - Error handling
 - Default working directory behavior
+- Long-running task execution and management
 
 ### Working Directory Handling
 - Custom working directory support
@@ -66,6 +67,8 @@ The integration tests are marked with `.skip()` by default and will only run whe
 - Concurrent request handling
 - Large prompt handling
 - Path traversal prevention
+- Long-running task timeout behavior
+- PID tracking and retrieval
 
 ### Integration Tests (Local Only)
 - File creation with real Claude CLI
@@ -90,18 +93,38 @@ When adding new e2e tests:
 2. Set up test directories in `beforeEach` and clean up in `afterEach`
 3. Use descriptive test names that explain the scenario
 4. Add appropriate assertions for both success and failure cases
+5. For long-running task tests, use the `wait` parameter and check PID responses
 
-Example:
+Examples:
 
 ```typescript
+// Testing standard synchronous behavior
 it('should handle complex file operations', async () => {
   const response = await client.callTool('claude_code', {
     prompt: 'Create multiple files and organize them',
     workFolder: testDir,
+    wait: true  // Default, but shown for clarity
   });
 
   expect(response).toBeTruthy();
   // Add specific assertions about the result
+});
+
+// Testing long-running task behavior
+it('should start a long-running task and return PID', async () => {
+  const response = await client.callTool('claude_code', {
+    prompt: 'Run a task that takes a long time',
+    workFolder: testDir,
+    wait: false  // Run in background mode
+  });
+
+  // Check for PID in metadata
+  expect(response.metadata).toBeDefined();
+  expect(response.metadata.pid).toBeGreaterThan(0);
+  expect(response.metadata.isRunning).toBe(true);
+  
+  // Check for initial output
+  expect(response.content[0].text).toContain('started with PID');
 });
 ```
 
@@ -126,14 +149,28 @@ The e2e tests are designed to run in CI environments without Claude CLI:
 ## Common Issues
 
 ### Tests Timing Out
-- Increase timeout in `vitest.config.e2e.ts`
+- Increase timeout in `vitest.config.e2e.ts` or use the specialized configs (e.g., `vitest.config.edge.ts`)
 - Check if the mock Claude CLI is set up correctly
 - Verify the server is building properly
+- For long-running tasks, ensure mocks properly simulate process events
 
 ### Mock Not Found
 - Ensure the mock setup runs in `beforeAll`
 - Check file permissions on the mock executable
 - Verify the mock path matches the server's expectations
+
+### Hung Mock Processes
+Sometimes mock processes from tests may not terminate properly, leading to high CPU usage. To detect and fix this:
+
+```bash
+# Check for and interactively clean up mock processes
+./scripts/cleanup-test-mocks.sh
+
+# Force cleanup without prompting
+./scripts/cleanup-test-mocks.sh --force
+```
+
+If you notice high CPU usage after running tests, this script can help identify and terminate any leftover mock processes.
 
 ### Integration Tests Failing
 - Ensure Claude CLI is installed and authenticated
@@ -146,3 +183,72 @@ The e2e tests are designed to run in CI environments without Claude CLI:
 - Implement stress testing scenarios
 - Add tests for specific Claude Code features
 - Create visual regression tests for output formatting
+- Enhance long-running task testing with better mocking
+- Add comprehensive test coverage for terminal management
+- Implement test factories for consistent mock creation
+
+## Testing Long-Running Tasks
+
+The long-running tasks feature requires special testing considerations:
+
+### Mock Implementation
+
+To test long-running tasks effectively, we use a custom mock approach for the terminal manager:
+
+```typescript
+// Example mock setup for terminal manager
+vi.mock('../terminal-manager.js', () => ({
+  terminalManager: {
+    executeCommand: vi.fn().mockImplementation(async (command, timeout) => {
+      // Return a "blocked" result for testing
+      return {
+        pid: 1234,
+        output: 'Initial mock output',
+        isBlocked: true
+      };
+    }),
+    getNewOutput: vi.fn().mockReturnValue('New mock output'),
+    forceTerminate: vi.fn().mockReturnValue(true),
+    listActiveSessions: vi.fn().mockReturnValue([{
+      pid: 1234,
+      isBlocked: true,
+      runtime: 5000
+    }])
+  }
+}));
+```
+
+### Testing the Full Workflow
+
+To test the complete long-running task workflow:
+
+1. Start a task with `wait=false`
+2. Capture the PID from the response metadata
+3. Call `read_output` with the PID to get updated output
+4. Call `list_sessions` to verify the task is listed
+5. Optionally call `force_terminate` to stop the task
+
+```typescript
+it('should support complete long-running task workflow', async () => {
+  // 1. Start task
+  const startResult = await client.callTool('claude_code', {
+    prompt: 'run a long task',
+    wait: false
+  });
+  
+  const pid = startResult.metadata.pid;
+  
+  // 2. Poll for updates
+  const outputResult = await client.callTool('read_output', { pid });
+  expect(outputResult.content[0].text).toContain('New mock output');
+  
+  // 3. List sessions
+  const sessionsResult = await client.callTool('list_sessions', {});
+  expect(sessionsResult.content[0].text).toContain(String(pid));
+  
+  // 4. Terminate
+  await client.callTool('force_terminate', { pid });
+});
+```
+
+See `TEST_MIGRATION_NEXT_STEPS.md` for more detailed guidance on improving the test suite for long-running tasks.
